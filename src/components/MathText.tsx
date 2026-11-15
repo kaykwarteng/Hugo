@@ -48,7 +48,9 @@ function normalizeMathText(text: string): string {
     .replace(/\t(?=au\b|heta\b|imes\b|ext\b|an\b|o\b|ilde\b|riangle)/g, '\\t') // \tau,\theta,\times,\text,\tan,\to,\tilde,\triangle
     .replace(/\v(?=ert\b|ar|ec\b|arepsilon\b)/g, '\\v') // \vert,\var*,\vec,\varepsilon
     .replace(/\\boldsym\b/g, '\\boldsymbol') // repair double-mangled \boldsymbol
-    .replace(/\\b(?=varepsilon\b)/g, '\\') // repair \bvarepsilon -> \varepsilon (if mangled oddly)
+    .replace(/\\boldsymbol\{\\boldsymbol\{/g, '\\boldsymbol{') // collapse double-wrap
+    .replace(/\\boldsymbol\{varepsilon\}/g, '\\boldsymbol{\\varepsilon}')
+    .replace(/\\bvarepsilon\b/g, '\\varepsilon') // repair \bvarepsilon -> \varepsilon
 }
 
 function renderKatex(tex: string, displayMode: boolean): string {
