@@ -38,32 +38,45 @@ function normalizeMathText(text: string): string {
   let s = text
   // Recover LaTeX commands mangled into control chars by escaped transport strings
   // e.g. "\frac" -> form-feed + "rac", "\nabla" -> newline + "abla", "\rho" -> CR + "ho", "\theta" -> tab + "heta"
-  s = s.replace(/\u0008([a-zA-Z])/g, '\\b$1') // \bar-like (\b)
-  s = s.replace(/\f(?=rac|rac\{|orm|orall)/g, '\\f') // \frac, \forall (approx)
-  s = s.replace(/\f/g, '\\f')
-  s = s.replace(/\n(?=abla|u|eq|ot|eg)/g, '\\n')
+  s = s.replace(/\u0008([a-zA-Z])/g, '\\b$1')
+  s = s.replace(/\f(?=rac|orm|orall)/g, '\\f')
+  s = s.replace(/\n(?=abla|eq|ot|eg|u(?!ll|nd))/g, '\\n')
   s = s.replace(/\r(?=ho|ightarrow|angle)/g, '\\r')
-  s = s.replace(/\t(?=heta|au|imes|an|ext)/g, '\\t')
-  // Common specific recoveries
-  s = s.replace(/\\nabla/g, '\\nabla') // keep
+  s = s.replace(/\t(?=heta|au|imes|ext)/g, '\\t')
+  s = s.replace(/\v(?=ert|arepsilon)/g, '\\v')
+  // If a bare \command appears (e.g. \frac, \rho, \epsilon) ensure backslash survives;
+  // also handle cases where backslash+letter got interpreted oddly are rare here.
   return s
 }
 
 function autoWrapBareMath(text: string): string {
-  // Wrap likely undelimited TeX-ish segments so KaTeX can render them.
-  // Runs that contain subscripts/superscripts or LaTeX commands, allowing =, operators, spaces, commas, parens.
-  return text.replace(
-    /(^|[\s(])((?:\\[a-zA-Z]+|[A-Za-z0-9]+)(?:[_^](?:\{[^}]+\}|[A-Za-z0-9]+)|\\[a-zA-Z]+|[A-Za-z0-9(),.=+\-/*<>|]|\s(?![A-Za-z]{3,}\s[A-Za-z])){1,})/g,
-    (m, lead: string, expr: string) => {
-      if (expr.startsWith('$') || expr.startsWith('\\(')) return m
-      // require a strong math signal to avoid wrapping plain words
-      if (!/[_^\\=]/.test(expr)) return m
-      // trim trailing sentence punctuation/space
-      const trimmed = expr.replace(/[.,;:]+$/g, '')
-      const tail = expr.slice(trimmed.length)
+  // First, wrap standalone LaTeX commands/structures that are clearly math.
+  let s = text.replace(/(\\frac\s*\{[^}]*\}\s*\{[^}]*\})/g, (m, expr, offset, str) => {
+    const before = str.slice(Math.max(0, offset - 1), offset)
+    if (before === '$' || before === '(') return m
+    return `$${expr}$`
+  })
+
+  // Wrap runs that look like math: contain subscripts/superscripts, =, or TeX commands,
+  // and may include braces, parens, operators, digits, commas, spaces.
+  s = s.replace(
+    /(^|[\s(,;:])((?:\\[a-zA-Z]+|[A-Za-z][A-Za-z0-9]*|[0-9]+(?:\.[0-9]+)?)(?:\s*(?:[_^]\s*(?:\{[^}]*\}|\\[a-zA-Z]+|[A-Za-z0-9]+)|\\[a-zA-Z]+(?:\s*\{[^}]*\})*|\{[^}]*\}|[A-Za-z0-9()+\-*/=.,<>|]+))*)/g,
+    (m, lead: string, expr: string, offset: number, str: string) => {
+      const before = str.slice(Math.max(0, offset - 1), offset)
+      if (before === '$' || lead === '$') return m
+      if (expr.startsWith('$') || expr.startsWith('\\(') || expr.startsWith('\\[')) return m
+      // need a math signal: sub/sup, equals, backslash cmd, or greek-like command usage
+      if (!/[_^=]|\\[a-zA-Z]/.test(expr)) return m
+      // avoid wrapping plain words that happen to contain '=' in weird cases; require mathy chars
+      if (!/[_^\\0-9(){}+\-*/=]/.test(expr)) return m
+      const trimmed = expr.replace(/[.,;:!?]+$/g, '').trimEnd()
+      if (!trimmed) return m
+      const tail = expr.slice(expr.indexOf(trimmed) + trimmed.length)
       return `${lead}$${trimmed}$${tail}`
     },
   )
+
+  return s
 }
 
 function renderKatex(tex: string, displayMode: boolean): string {
