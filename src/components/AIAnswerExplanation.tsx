@@ -110,11 +110,15 @@ export function AIAnswerExplanation({
         <dl className="mb-3 grid gap-2 text-xs sm:grid-cols-2">
           <div className="rounded-lg border border-slate-200 bg-white/70 p-2 dark:border-slate-800 dark:bg-slate-900/50">
             <dt className="font-medium text-slate-500 dark:text-slate-400">Source answer</dt>
-            <dd>{question.correctAnswers.join(', ') || '—'}</dd>
+            <dd>
+              <MathText>{question.correctAnswers.join(', ') || '—'}</MathText>
+            </dd>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white/70 p-2 dark:border-slate-800 dark:bg-slate-900/50">
             <dt className="font-medium text-slate-500 dark:text-slate-400">AI answer</dt>
-            <dd>{explanation.aiCorrectOptions.join(', ')}</dd>
+            <dd>
+              <MathText>{explanation.aiCorrectOptions.join(', ')}</MathText>
+            </dd>
           </div>
         </dl>
       )}
@@ -125,7 +129,8 @@ export function AIAnswerExplanation({
         <ul className="mt-3 space-y-1.5 text-xs">
           {explanation.optionNotes.map((note) => (
             <li key={note.option}>
-              <span className="font-medium">{note.option}:</span> {note.note}
+              <span className="font-medium"><MathText as="span">{note.option}</MathText>:</span>{' '}
+              <MathText as="span">{note.note}</MathText>
             </li>
           ))}
         </ul>

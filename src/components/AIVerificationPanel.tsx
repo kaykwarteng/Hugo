@@ -198,16 +198,22 @@ export function AIVerificationPanel({ questions, ai, onApply }: AIVerificationPa
                 <dl className="mb-2 grid gap-2 text-xs sm:grid-cols-2">
                   <div className="rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-900">
                     <dt className="font-medium text-slate-500 dark:text-slate-400">Source answer</dt>
-                    <dd>{verification.sourceAnswers.join(', ') || '—'}</dd>
+                    <dd>
+                      <MathText>{verification.sourceAnswers.join(', ') || '—'}</MathText>
+                    </dd>
                   </div>
                   <div className="rounded-lg border border-slate-200 bg-white p-2 dark:border-slate-800 dark:bg-slate-900">
                     <dt className="font-medium text-slate-500 dark:text-slate-400">AI answer</dt>
-                    <dd>{verification.suggestedAnswers.join(', ')}</dd>
+                    <dd>
+                      <MathText>{verification.suggestedAnswers.join(', ')}</MathText>
+                    </dd>
                   </div>
                 </dl>
               )}
 
-              <p className="text-slate-600 dark:text-slate-400">{verification.reasoning}</p>
+              <p className="text-slate-600 dark:text-slate-400">
+                <MathText>{verification.reasoning}</MathText>
+              </p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 Confidence: {verification.confidence}
               </p>
