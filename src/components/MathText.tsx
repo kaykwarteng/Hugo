@@ -41,7 +41,7 @@ function escapeHtml(s: string): string {
  */
 function normalizeMathText(text: string): string {
   return text
-    .replace(/\u0008(?=egin\b|eta\b|ar\b|ig|inom|oldsymbol)/g, '\\b') // \begin,\beta,\bar,\big,\binom,\boldsymbol
+    .replace(/[\u0008\u2408](?=egin\b|eta\b|ar\b|ig|inom|oldsymbol)/g, '\\b') // \begin,\beta,\bar,\big,\binom,\boldsymbol
     .replace(/\f(?=rac\b|orall\b|box\b)/g, '\\f') // \frac,\forall,\fbox
     .replace(/\n(?=abla\b|eq\b|u\b|ot\b|eg\b|ewline\b)/g, '\\n') // \nabla,\neq,\nu,\not,\neg,\newline
     .replace(/\r(?=ho\b|ight|angle\b|Vert\b|vert\b)/g, '\\r') // \rho,\rightarrow,\rangle,\rVert,\rvert
