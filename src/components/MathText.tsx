@@ -34,6 +34,38 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+function normalizeMathText(text: string): string {
+  let s = text
+  // Recover LaTeX commands mangled into control chars by escaped transport strings
+  // e.g. "\frac" -> form-feed + "rac", "\nabla" -> newline + "abla", "\rho" -> CR + "ho", "\theta" -> tab + "heta"
+  s = s.replace(/\u0008([a-zA-Z])/g, '\\b$1') // \bar-like (\b)
+  s = s.replace(/\f(?=rac|rac\{|orm|orall)/g, '\\f') // \frac, \forall (approx)
+  s = s.replace(/\f/g, '\\f')
+  s = s.replace(/\n(?=abla|u|eq|ot|eg)/g, '\\n')
+  s = s.replace(/\r(?=ho|ightarrow|angle)/g, '\\r')
+  s = s.replace(/\t(?=heta|au|imes|an|ext)/g, '\\t')
+  // Common specific recoveries
+  s = s.replace(/\\nabla/g, '\\nabla') // keep
+  return s
+}
+
+function autoWrapBareMath(text: string): string {
+  // Wrap likely undelimited TeX-ish segments so KaTeX can render them.
+  // Runs that contain subscripts/superscripts or LaTeX commands, allowing =, operators, spaces, commas, parens.
+  return text.replace(
+    /(^|[\s(])((?:\\[a-zA-Z]+|[A-Za-z0-9]+)(?:[_^](?:\{[^}]+\}|[A-Za-z0-9]+)|\\[a-zA-Z]+|[A-Za-z0-9(),.=+\-/*<>|]|\s(?![A-Za-z]{3,}\s[A-Za-z])){1,})/g,
+    (m, lead: string, expr: string) => {
+      if (expr.startsWith('$') || expr.startsWith('\\(')) return m
+      // require a strong math signal to avoid wrapping plain words
+      if (!/[_^\\=]/.test(expr)) return m
+      // trim trailing sentence punctuation/space
+      const trimmed = expr.replace(/[.,;:]+$/g, '')
+      const tail = expr.slice(trimmed.length)
+      return `${lead}$${trimmed}$${tail}`
+    },
+  )
+}
+
 function renderKatex(tex: string, displayMode: boolean): string {
   if (typeof window === 'undefined' || !window.katex) {
     return escapeHtml(tex)
@@ -57,9 +89,12 @@ function renderKatex(tex: string, displayMode: boolean): string {
 function processMath(text: string): string {
   if (!text) return ''
 
+  let s = normalizeMathText(text)
+  s = autoWrapBareMath(s)
+
   // Protect display math first
   const displayParts: string[] = []
-  let s = text.replace(DISPLAY_RE, (_m, g1, g2) => {
+  s = s.replace(DISPLAY_RE, (_m, g1, g2) => {
     const tex = (g1 ?? g2 ?? '').trim()
     const html = renderKatex(tex, true)
     const idx = displayParts.length
