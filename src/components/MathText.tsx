@@ -34,6 +34,21 @@ function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+/**
+ * Recover LaTeX commands mangled into control characters by JSON/string escaping
+ * (e.g. "\\frac" -> form-feed + "rac", "\\nabla" -> newline + "abla").
+ * Only applied for control-char + known command continuation to avoid altering real whitespace.
+ */
+function normalizeMathText(text: string): string {
+  return text
+    .replace(/\u0008(?=egin\b|eta\b|ar\b|ig|inom|oldsymbol)/g, '\\b') // \begin,\beta,\bar,\big,\binom,\boldsymbol
+    .replace(/\f(?=rac\b|orall\b|box\b)/g, '\\f') // \frac,\forall,\fbox
+    .replace(/\n(?=abla\b|eq\b|u\b|ot\b|eg\b|ewline\b)/g, '\\n') // \nabla,\neq,\nu,\not,\neg,\newline
+    .replace(/\r(?=ho\b|ight|angle\b|Vert\b|vert\b)/g, '\\r') // \rho,\rightarrow,\rangle,\rVert,\rvert
+    .replace(/\t(?=au\b|heta\b|imes\b|ext\b|an\b|o\b|ilde\b|riangle)/g, '\\t') // \tau,\theta,\times,\text,\tan,\to,\tilde,\triangle
+    .replace(/\v(?=ert\b|ar|ec\b|arepsilon\b)/g, '\\v') // \vert,\var*,\vec,\varepsilon
+}
+
 function renderKatex(tex: string, displayMode: boolean): string {
   if (typeof window === 'undefined' || !window.katex) {
     return escapeHtml(tex)
@@ -57,9 +72,11 @@ function renderKatex(tex: string, displayMode: boolean): string {
 function processMath(text: string): string {
   if (!text) return ''
 
+  let s = normalizeMathText(text)
+
   // Protect display math first
   const displayParts: string[] = []
-  let s = text.replace(DISPLAY_RE, (_m, g1, g2) => {
+  s = s.replace(DISPLAY_RE, (_m, g1, g2) => {
     const tex = (g1 ?? g2 ?? '').trim()
     const html = renderKatex(tex, true)
     const idx = displayParts.length
