@@ -20,7 +20,9 @@ export const AI_COMMON_SYSTEM =
   'You are reviewing multiple-choice questions for a study app. ' +
   'Reply with JSON only, matching the provided schema. ' +
   'Never invent options that were not given. ' +
-  'When you are not confident, say so through the confidence field rather than guessing.'
+  'When you are not confident, say so through the confidence field rather than guessing. ' +
+  'When writing mathematical expressions or equations, always enclose them in LaTeX delimiters: ' +
+  'use $...$ for inline math and $$...$$ for display math. Never leave equations, symbols, or formulas bare or undelimited.'
 
 /** `[0] Paris` / `[1] Rome`, one per line. */
 export function formatOptions(options: string[]): string {

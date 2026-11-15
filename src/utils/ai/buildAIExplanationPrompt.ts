@@ -64,7 +64,9 @@ export function buildAIExplanationPrompt({ question, selected }: ExplanationProm
     '- correctOptionIndexes: the options you believe are correct, as indexes.',
     '- explanation: why the correct option is correct, why the chosen option is',
     '  wrong if it was, and whether the source answer itself looks mistaken.',
+    '  Write any math or equations using LaTeX delimiters ($...$ or $$...$$), never bare.',
     '- optionNotes: short notes on individual options where useful (may be empty).',
+    '  Write any math or equations using LaTeX delimiters ($...$ or $$...$$), never bare.',
     '- confidence: how sure you are.',
   )
 

@@ -63,5 +63,7 @@ export function buildAIVerificationPrompt(questions: QuizQuestion[]): string {
     'For each question return one entry carrying its questionId unchanged, the',
     'options you believe are correct as indexes, a short reasoning, your',
     'confidence, and optionally a better explanation (empty string for none).',
+    'Write any math or equations in reasoning/suggestedExplanation using LaTeX',
+    'delimiters ($...$ or $$...$$); never leave equations or symbols bare or undelimited.',
   ].join('\n')
 }
