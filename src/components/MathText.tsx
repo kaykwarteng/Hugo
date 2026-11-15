@@ -41,12 +41,14 @@ function escapeHtml(s: string): string {
  */
 function normalizeMathText(text: string): string {
   return text
-    .replace(/[\u0008\u2408](?=egin\b|eta\b|ar\b|ig|inom|oldsymbol)/g, '\\b') // \begin,\beta,\bar,\big,\binom,\boldsymbol
+    .replace(/[\u0008\u2408](?=egin\b|eta\b|ar\b|ig|inom|oldsymbol\b|oldsym\b|ullet\b)/g, '\\b') // \begin,\beta,\bar,\big,\binom,\boldsymbol,\bullet
     .replace(/\f(?=rac\b|orall\b|box\b)/g, '\\f') // \frac,\forall,\fbox
     .replace(/\n(?=abla\b|eq\b|u\b|ot\b|eg\b|ewline\b)/g, '\\n') // \nabla,\neq,\nu,\not,\neg,\newline
     .replace(/\r(?=ho\b|ight|angle\b|Vert\b|vert\b)/g, '\\r') // \rho,\rightarrow,\rangle,\rVert,\rvert
     .replace(/\t(?=au\b|heta\b|imes\b|ext\b|an\b|o\b|ilde\b|riangle)/g, '\\t') // \tau,\theta,\times,\text,\tan,\to,\tilde,\triangle
     .replace(/\v(?=ert\b|ar|ec\b|arepsilon\b)/g, '\\v') // \vert,\var*,\vec,\varepsilon
+    .replace(/\\boldsym\b/g, '\\boldsymbol') // repair double-mangled \boldsymbol
+    .replace(/\\b(?=varepsilon\b)/g, '\\') // repair \bvarepsilon -> \varepsilon (if mangled oddly)
 }
 
 function renderKatex(tex: string, displayMode: boolean): string {
