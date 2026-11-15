@@ -1,0 +1,82 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AIAnswerExplanation } from './components/AIAnswerExplanation'
+import { AIBusyOverlay } from './components/AIBusyOverlay'
+import { AISettings } from './components/AISettings'
+import { AIVerificationPanel } from './components/AIVerificationPanel'
+import { AppNav } from './components/AppNav'
+import { ConfirmDialog } from './components/ConfirmDialog'
+import { HomeDashboard } from './components/HomeDashboard'
+import { QuizCard } from './components/QuizCard'
+import { QuizHistory } from './components/QuizHistory'
+import { QuizImporter } from './components/QuizImporter'
+import { QuizSetup } from './components/QuizSetup'
+import { QuizTopBar } from './components/QuizTopBar'
+import { RecentResults } from './components/RecentResults'
+import { ResultScreen, type ResultScreenExtras } from './components/ResultScreen'
+import { CourseLibrary } from './components/CourseLibrary'
+import { SavedQuizList } from './components/SavedQuizList'
+import { SaveQuizPanel } from './components/SaveQuizPanel'
+import { SettingsDialog } from './components/SettingsDialog'
+import { StepIndicator } from './components/StepIndicator'
+import { useAI } from './hooks/useAI'
+import { useAppearance } from './hooks/useAppearance'
+import { useQuiz } from './hooks/useQuiz'
+import { useQuizHistory } from './hooks/useQuizHistory'
+import { useCourses } from './hooks/useCourses'
+import { useSavedQuizzes } from './hooks/useSavedQuizzes'
+import { useSound } from './hooks/useSound'
+import { useTheme } from './hooks/useTheme'
+import { useTimer } from './hooks/useTimer'
+import { PROVIDERS } from './services/ai/models'
+import { isSoundSupported, playSound } from './services/sound'
+import { isStorageAvailable } from './services/storage'
+import type { AIRequestKind } from './types/ai'
+import type { View } from './types/navigation'
+import type { QuizAttempt, QuizQuestion, QuizSession, SavedQuiz } from './types/quiz'
+import {
+  attemptToSession,
+  findResumable,
+  formatDateTime,
+  progressToSession,
+  sortAttemptsByRecency,
+} from './utils/library'
+import { isMultiAnswer, isQuestionLocked, isRevealed } from './utils/quiz'
+
+/** How many entries the home dashboard's "recent results" strip shows. */
+const RECENT_RESULTS_LIMIT = 5
+
+/**
+ * AI workflows that block the screen while they run.
+ *
+ * These three are started from the import and setup screens, where the pasted
+ * text and the pending questions live in component state — navigating away or
+ * switching importer tab mid-request would throw both away. An `explanation` is
+ * deliberately absent: it can't lose anything, so the results screen stays usable.
+ */
+const BLOCKING_AI_KINDS = new Set<AIRequestKind>(['formatting', 'json-repair', 'verification'])
+
+export default function App() {
+  const { theme, toggleTheme } = useTheme()
+  const { appearance, updateAppearance, resetAppearance } = useAppearance()
+  const { sound, updateSound } = useSound()
+  const quiz = useQuiz()
+  const library = useSavedQuizzes()
+  const coursesApi = useCourses()
+  const history = useQuizHistory()
+  // The AI assistant owns its own state so this component doesn't grow one
+  // branch per workflow; everything below just reads `ai.ready`.
+  const ai = useAI()
+
+  // Which of the four destinations is showing. Everything else on screen is a
+  // sub-state layered over one of them — see `types/navigation.ts`.
+  const [view, setView] = useState<View>('home')
+  // Questions loaded from an import (or picked from the library) but not yet
+  // started — the setup phase of the Create Quiz flow.
+  const [pendingQuestions, setPendingQuestions] = useState<QuizQuestion[] | null>(null)
+  // Set when the pending questions belong to a saved quiz, so the resulting
+  // attempt is filed against it.
+  const [pendingQuiz, setPendingQuiz] = useState<SavedQuiz | null>(null)
+  // Which saved quiz's history is open, and which attempt is being reviewed.
+  const [historyQuizId, setHistoryQuizId] = useState<string | null>(null)
+  const [reviewAttempt, setReviewAttempt] = useState<QuizAttempt | null>(null)
+ 

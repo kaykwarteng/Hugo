@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./src/assets/hugo-mark.svg" sizes="any" />
+    <link rel="apple-touch-icon" href="./src/assets/hugo-mark.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Hugo — structured study with courses, chapters, and math-ready quizzes." />
+    <meta name="theme-color" content="#0019d1" />
+    <title>Hugo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+    <style>
+      .math-text .katex { font-size: 1.05em; }
+      .math-display { display: block; margin: 0.75em 0; overflow-x: auto; max-width: 100%; }
+      .math-display .katex-display { margin: 0; }
+      .math-inline { display: inline; }
+      /* Prevent long equations from breaking layout */
+      .math-text { overflow-wrap: anywhere; word-break: break-word; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
