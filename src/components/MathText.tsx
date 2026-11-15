@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 /**
  * Renders text that may contain LaTeX math using KaTeX.
@@ -97,7 +97,36 @@ interface MathTextProps {
 }
 
 export function MathText({ children, className = '', as: Tag = 'span' }: MathTextProps) {
-  const html = useMemo(() => processMath(children ?? ''), [children])
+  const [katexReady, setKatexReady] = useState(
+    () => typeof window !== 'undefined' && !!window.katex,
+  )
+
+  useEffect(() => {
+    if (katexReady) return
+    let cancelled = false
+    const check = () => {
+      if (window.katex) {
+        if (!cancelled) setKatexReady(true)
+        return true
+      }
+      return false
+    }
+    if (check()) return
+    const id = window.setInterval(() => {
+      if (check()) window.clearInterval(id)
+    }, 50)
+    const timeout = window.setTimeout(() => window.clearInterval(id), 10000)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+      window.clearTimeout(timeout)
+    }
+  }, [katexReady])
+
+  const html = useMemo(
+    () => processMath(children ?? ''),
+    [children, katexReady],
+  )
 
   return (
     <Tag
