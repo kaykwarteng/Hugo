@@ -8,6 +8,7 @@ import { AI_FORMATTING_MAX_CHARS } from '../utils/ai/buildAIFormattingPrompt'
 import { parseMcqText } from '../utils/parseMcqText'
 import { isMultiAnswer } from '../utils/quiz'
 import { Spinner } from './Spinner'
+import { IconSparkles } from './icons/Icons'
 
 interface TextUploaderProps {
   onLoad: (questions: QuizQuestion[]) => void
@@ -146,7 +147,10 @@ export function TextUploader({ onLoad, ai }: TextUploaderProps) {
                   Formatting{formatProgress}… (cancel)
                 </>
               ) : (
-                '✨ Format with AI'
+                <>
+                  <IconSparkles size={16} />
+                  Format with AI
+                </>
               )}
             </button>
             {preAiText !== null && !formattingNow && (
@@ -179,7 +183,10 @@ export function TextUploader({ onLoad, ai }: TextUploaderProps) {
           {formatting !== null && (
             <div className="animate-fade-slide-in rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm dark:border-indigo-900 dark:bg-indigo-950/50">
               <div className="flex items-start justify-between gap-3">
-                <p className="font-medium">✨ Reformatted by AI — check it before continuing</p>
+                <p className="inline-flex items-center gap-1.5 font-medium">
+                  <IconSparkles size={16} />
+                  Reformatted by AI — check it before continuing
+                </p>
                 <button
                   type="button"
                   onClick={() => setFormatting(null)}

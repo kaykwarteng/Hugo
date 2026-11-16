@@ -4,6 +4,7 @@ import type { QuizQuestion } from '../types/quiz'
 import { AI_DISCLAIMER, AI_UNCERTAIN_NOTE } from './aiDisclaimer'
 import { Spinner } from './Spinner'
 import { MathText } from './MathText'
+import { IconBot } from './icons/Icons'
 
 interface AIAnswerExplanationProps {
   question: QuizQuestion
@@ -55,7 +56,10 @@ export function AIAnswerExplanation({
               Asking AI… (cancel)
             </>
           ) : (
-            '🤖 Ask AI'
+            <>
+              <IconBot size={16} />
+              Ask AI
+            </>
           )}
         </button>
         {pending && (
@@ -79,7 +83,10 @@ export function AIAnswerExplanation({
     <div className="animate-fade-slide-in mt-4 rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm dark:border-indigo-900 dark:bg-indigo-950/50">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold">🤖 AI evaluation</span>
+          <span className="inline-flex items-center gap-1.5 font-semibold">
+            <IconBot size={16} />
+            AI evaluation
+          </span>
           <span
             className={`rounded-full px-3 py-1 text-xs font-medium ${
               explanation.agreesWithSource

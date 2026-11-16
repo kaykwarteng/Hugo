@@ -6,6 +6,7 @@ import type { QuizQuestion } from '../types/quiz'
 import { AI_JSON_REPAIR_MAX_CHARS } from '../utils/ai/buildAIJsonRepairPrompt'
 import { parseQuizJson } from '../utils/quiz'
 import { Spinner } from './Spinner'
+import { IconSparkles } from './icons/Icons'
 
 interface JsonUploaderProps {
   onLoad: (questions: QuizQuestion[]) => void
@@ -140,7 +141,10 @@ export function JsonUploader({ onLoad, ai }: JsonUploaderProps) {
                   Fixing{repairProgress}… (cancel)
                 </>
               ) : (
-                '✨ Fix JSON with AI'
+                <>
+                  <IconSparkles size={16} />
+                  Fix JSON with AI
+                </>
               )}
             </button>
             {preAiText !== null && !repairingNow && (
@@ -173,7 +177,10 @@ export function JsonUploader({ onLoad, ai }: JsonUploaderProps) {
           {repair !== null && (
             <div className="animate-fade-slide-in rounded-xl border border-indigo-200 bg-indigo-50 p-4 text-sm dark:border-indigo-900 dark:bg-indigo-950/50">
               <div className="flex items-start justify-between gap-3">
-                <p className="font-medium">✨ Repaired by AI — check it before loading</p>
+                <p className="inline-flex items-center gap-1.5 font-medium">
+                  <IconSparkles size={16} />
+                  Repaired by AI — check it before loading
+                </p>
                 <button
                   type="button"
                   onClick={() => setRepair(null)}
