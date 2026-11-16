@@ -90,7 +90,7 @@ export function HomeDashboard({
           />
         </h1>
         <p className="mt-2 text-slate-600 dark:text-slate-400">
-          Structured study — courses, chapters, and math-ready quizzes. Your library lives in a local database.
+          Organize courses and practice with math-ready quizzes — all stored locally.
         </p>
       </section>
 
