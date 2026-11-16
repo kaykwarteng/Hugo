@@ -4,7 +4,7 @@ import type { QuizQuestion } from '../types/quiz'
 import { AI_DISCLAIMER, AI_UNCERTAIN_NOTE } from './aiDisclaimer'
 import { Spinner } from './Spinner'
 import { MathText } from './MathText'
-import { IconBot } from './icons/Icons'
+import { IconSparkles } from './icons/Icons'
 
 interface AIAnswerExplanationProps {
   question: QuizQuestion
@@ -57,7 +57,7 @@ export function AIAnswerExplanation({
             </>
           ) : (
             <>
-              <IconBot size={16} />
+              <IconSparkles size={16} />
               Ask AI
             </>
           )}
@@ -84,7 +84,7 @@ export function AIAnswerExplanation({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1.5 font-semibold">
-            <IconBot size={16} />
+            <IconSparkles size={16} />
             AI evaluation
           </span>
           <span

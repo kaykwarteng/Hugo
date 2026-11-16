@@ -10,7 +10,7 @@ import {
 } from '../utils/appearance'
 import { SOUND_OPTIONS } from '../utils/sound'
 import { Modal } from './Modal'
-import { IconBot } from './icons/Icons'
+import { IconSparkles } from './icons/Icons'
 
 interface SettingsDialogProps {
   theme: Theme
@@ -236,7 +236,7 @@ export function SettingsDialog({
 
         <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
           <h3 className="inline-flex items-center gap-2 text-sm font-semibold">
-            <IconBot size={16} />
+            <IconSparkles size={16} />
             AI assistant
           </h3>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{aiStatus}</p>

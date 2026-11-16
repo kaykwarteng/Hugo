@@ -5,7 +5,7 @@ import type { BrowserSupport } from '../services/ai/providerRegistry'
 import { AI_KEY_PRIVACY_NOTE } from './aiDisclaimer'
 import { Modal } from './Modal'
 import { Spinner } from './Spinner'
-import { IconBot } from './icons/Icons'
+import { IconSparkles } from './icons/Icons'
 
 interface AISettingsProps {
   ai: UseAI
@@ -64,7 +64,7 @@ export function AISettings({ ai, onClose }: AISettingsProps) {
     >
       <div className="flex items-start justify-between gap-3">
           <h2 id={titleId} className="inline-flex items-center gap-2 text-lg font-semibold">
-            <IconBot size={20} />
+            <IconSparkles size={20} />
             AI assistant
           </h2>
           <button

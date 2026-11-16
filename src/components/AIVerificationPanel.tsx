@@ -14,7 +14,7 @@ import { toggleOption } from '../utils/quiz'
 import { AI_DISCLAIMER } from './aiDisclaimer'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Spinner } from './Spinner'
-import { IconBot } from './icons/Icons'
+import { IconSparkles } from './icons/Icons'
 
 interface AIVerificationPanelProps {
   questions: QuizQuestion[]
@@ -86,7 +86,7 @@ export function AIVerificationPanel({ questions, ai, onApply }: AIVerificationPa
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="inline-flex items-center gap-2 font-semibold">
-            <IconBot size={18} />
+            <IconSparkles size={18} />
             Check answers with AI
           </h3>
           <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
