@@ -14,6 +14,7 @@ import { QuizTopBar } from './components/QuizTopBar'
 import { RecentResults } from './components/RecentResults'
 import { ResultScreen, type ResultScreenExtras } from './components/ResultScreen'
 import { CourseLibrary } from './components/CourseLibrary'
+import { SavedQuizDetail } from './components/SavedQuizDetail'
 import { SavedQuizList } from './components/SavedQuizList'
 import { SaveQuizPanel } from './components/SaveQuizPanel'
 import { SettingsDialog } from './components/SettingsDialog'
@@ -89,8 +90,9 @@ export default function App() {
   useEffect(() => {
     refreshCourseSessions()
   }, [refreshCourseSessions, view])
-  // Which saved quiz's history is open, and which attempt is being reviewed.
+  // Which saved quiz's history/detail is open, and which attempt is being reviewed.
   const [historyQuizId, setHistoryQuizId] = useState<string | null>(null)
+  const [openQuizId, setOpenQuizId] = useState<string | null>(null)
   const [reviewAttempt, setReviewAttempt] = useState<QuizAttempt | null>(null)
   const [storageAvailable] = useState(isStorageAvailable)
   // Checks for the constructor only — asking never creates an AudioContext.
@@ -158,6 +160,7 @@ export default function App() {
     view,
     pendingQuestions === null ? 'import' : 'setup',
     historyQuizId ?? '',
+    openQuizId ?? '',
     reviewAttempt?.id ?? '',
     session?.status ?? 'none',
   ].join('|')
@@ -183,6 +186,7 @@ export default function App() {
     (next: View) => {
       setView(next)
       setHistoryQuizId(null)
+      setOpenQuizId(null)
       setReviewAttempt(null)
       if (session?.status === 'finished') resetQuiz()
     },
@@ -194,6 +198,7 @@ export default function App() {
     setPendingQuestions(questions)
     setPendingQuiz(saved)
     setHistoryQuizId(null)
+    setOpenQuizId(null)
     setReviewAttempt(null)
     setView('create')
   }, [])
@@ -202,6 +207,7 @@ export default function App() {
     (saved: SavedQuiz) => {
       if (!saved.progress) return
       setHistoryQuizId(null)
+      setOpenQuizId(null)
       setReviewAttempt(null)
       quiz.resumeSession(progressToSession(saved, saved.progress))
     },
@@ -231,11 +237,12 @@ export default function App() {
       // Storage drops the quiz's attempts with it — resync the history state.
       refreshHistory()
       if (historyQuizId === saved.id) setHistoryQuizId(null)
+      if (openQuizId === saved.id) setOpenQuizId(null)
       if (reviewAttempt?.quizId === saved.id) setReviewAttempt(null)
       if (session?.quizId === saved.id) resetQuiz()
       if (pendingQuiz?.id === saved.id) clearSetup()
     },
-    [library, refreshHistory, historyQuizId, reviewAttempt, session, resetQuiz, pendingQuiz, clearSetup],
+    [library, refreshHistory, historyQuizId, openQuizId, reviewAttempt, session, resetQuiz, pendingQuiz, clearSetup],
   )
 
   const handleDeleteAttempt = useCallback(
@@ -253,10 +260,11 @@ export default function App() {
     (quizId: string) => {
       resetQuiz()
       clearSetup()
+      setOpenQuizId(null)
       setReviewAttempt(null)
       setHistoryQuizId(quizId)
     },
-    [resetQuiz],
+    [resetQuiz, clearSetup],
   )
 
   /**
@@ -271,12 +279,13 @@ export default function App() {
   }, [session, resetQuiz])
 
   const historyQuiz = historyQuizId ? library.quizzes.find((q) => q.id === historyQuizId) ?? null : null
+  const openQuiz = openQuizId ? library.quizzes.find((q) => q.id === openQuizId) ?? null : null
   const activeSession =
-    reviewAttempt === null && historyQuiz === null && session !== null && session.status === 'active'
+    reviewAttempt === null && historyQuiz === null && openQuiz === null && session !== null && session.status === 'active'
       ? session
       : null
   const finishedSession =
-    reviewAttempt === null && historyQuiz === null && session !== null && session.status === 'finished'
+    reviewAttempt === null && historyQuiz === null && openQuiz === null && session !== null && session.status === 'finished'
       ? session
       : null
 
@@ -307,7 +316,7 @@ export default function App() {
 
   // The library and results screens use their width; reading screens stay
   // narrow so long questions don't run across the whole monitor.
-  const wide = reviewAttempt === null && historyQuiz === null && finishedSession === null && view !== 'create'
+  const wide = reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view !== 'create'
 
   const dialogs = (
     <>
@@ -398,6 +407,30 @@ export default function App() {
           />
         )}
 
+        {/* 2b. Standalone quiz question management. */}
+        {reviewAttempt === null && historyQuiz === null && openQuiz !== null && (
+          <SavedQuizDetail
+            quiz={openQuiz}
+            onBack={() => setOpenQuizId(null)}
+            onStart={() => openSetup(openQuiz.questions, openQuiz)}
+            onAddQuestion={(q) => library.updateQuiz(openQuiz.id, [...openQuiz.questions, q])}
+            onAddQuestions={(qs) => library.updateQuiz(openQuiz.id, [...openQuiz.questions, ...qs])}
+            onUpdateQuestion={(q) =>
+              library.updateQuiz(
+                openQuiz.id,
+                openQuiz.questions.map((x) => (x.id === q.id ? q : x)),
+              )
+            }
+            onDeleteQuestion={(questionId) =>
+              library.updateQuiz(
+                openQuiz.id,
+                openQuiz.questions.filter((q) => q.id !== questionId),
+              )
+            }
+            nextQuestionId={openQuiz.questions.reduce((max, q) => Math.max(max, q.id), 0) + 1}
+          />
+        )}
+
         {/* 3. The result of the run just submitted. */}
         {finishedSession !== null && (
           <FinishedQuiz
@@ -412,7 +445,7 @@ export default function App() {
         )}
 
         {/* 4. Create Quiz — paste, then review and configure. */}
-        {reviewAttempt === null && historyQuiz === null && finishedSession === null && view === 'create' && (
+        {reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view === 'create' && (
           <div className="space-y-5">
             <div className="space-y-3">
               <h1 className="text-2xl font-bold tracking-tight">Create Quiz</h1>
@@ -489,7 +522,7 @@ export default function App() {
         )}
 
         {/* 5. Quiz Library — hierarchical courses + standalone quizzes. */}
-        {reviewAttempt === null && historyQuiz === null && finishedSession === null && view === 'library' && (
+        {reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view === 'library' && (
           <div className="space-y-10">
             {coursesApi.error && (
               <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
@@ -557,7 +590,7 @@ export default function App() {
                       Standalone quizzes
                     </h2>
                     <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-                      Quizzes saved from Create Quiz. Start, continue, or review them here.
+                      Quizzes saved from Create Quiz. Click a quiz to view and edit its questions.
                     </p>
                     <SavedQuizList
                       quizzes={library.quizzes}
@@ -565,6 +598,7 @@ export default function App() {
                       onStart={(saved) => openSetup(saved.questions, saved)}
                       onResume={handleResume}
                       onStartOver={handleStartOver}
+                      onOpen={(saved) => setOpenQuizId(saved.id)}
                       onViewResults={(saved) => setHistoryQuizId(saved.id)}
                       onRename={handleRename}
                       onDelete={handleDeleteQuiz}
@@ -578,7 +612,7 @@ export default function App() {
         )}
 
         {/* 6. Results — every attempt, across every quiz. */}
-        {reviewAttempt === null && historyQuiz === null && finishedSession === null && view === 'results' && (
+        {reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view === 'results' && (
           <RecentResults
             attempts={allAttempts}
             heading="Results"
@@ -609,7 +643,7 @@ export default function App() {
         )}
 
         {/* 7. Home. */}
-        {reviewAttempt === null && historyQuiz === null && finishedSession === null && view === 'home' && (
+        {reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view === 'home' && (
           <HomeDashboard
             onNavigate={navigate}
             resumable={resumable}

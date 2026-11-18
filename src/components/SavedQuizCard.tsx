@@ -12,6 +12,8 @@ interface SavedQuizCardProps {
   onPrimary: () => void
   /** Restart from question 1, discarding an unfinished run. */
   onStartOver: () => void
+  /** Open the quiz to view and edit its questions. */
+  onOpen: () => void
   onViewResults: () => void
   onRename: () => void
   onDelete: () => void
@@ -48,6 +50,7 @@ export function SavedQuizCard({
   stats,
   onPrimary,
   onStartOver,
+  onOpen,
   onViewResults,
   onRename,
   onDelete,
@@ -71,10 +74,18 @@ export function SavedQuizCard({
   ]
 
   return (
-    <li className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <li className="group relative flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-indigo-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-indigo-700">
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Open quiz ${quiz.name}`}
+        className="absolute inset-0 z-0 rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+      />
       <div className="flex items-start justify-between gap-3">
-        <h3 className="font-semibold leading-snug break-words">{quiz.name}</h3>
-        <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLASS[status]}`}>
+        <h3 className="font-semibold leading-snug break-words group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+          {quiz.name}
+        </h3>
+        <span className={`relative z-10 shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLASS[status]}`}>
           {STATUS_LABEL[status]}
         </span>
       </div>
@@ -141,7 +152,7 @@ export function SavedQuizCard({
         )}
       </dl>
 
-      <div className="mt-auto flex items-center gap-2 pt-4">
+      <div className="relative z-10 mt-auto flex items-center gap-2 pt-4">
         <button
           type="button"
           onClick={onPrimary}

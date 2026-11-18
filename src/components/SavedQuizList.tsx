@@ -14,6 +14,8 @@ interface SavedQuizListProps {
   onResume: (quiz: SavedQuiz) => void
   /** Throw away an unfinished run and start from question 1. */
   onStartOver: (quiz: SavedQuiz) => void
+  /** Open the quiz to view and edit its questions. */
+  onOpen: (quiz: SavedQuiz) => void
   onViewResults: (quiz: SavedQuiz) => void
   onRename: (quiz: SavedQuiz, name: string) => void
   onDelete: (quiz: SavedQuiz) => void
@@ -28,6 +30,7 @@ export function SavedQuizList({
   onStart,
   onResume,
   onStartOver,
+  onOpen,
   onViewResults,
   onRename,
   onDelete,
@@ -92,6 +95,7 @@ export function SavedQuizList({
                 stats={stats}
                 onPrimary={() => (status === 'in-progress' ? onResume(quiz) : onStart(quiz))}
                 onStartOver={() => setPendingStartOver(quiz)}
+                onOpen={() => onOpen(quiz)}
                 onViewResults={() => onViewResults(quiz)}
                 onRename={() => setPendingRename(quiz)}
                 onDelete={() => setPendingDelete(quiz)}
