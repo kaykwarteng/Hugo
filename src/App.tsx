@@ -583,6 +583,7 @@ export default function App() {
                 setPendingQuiz(null)
                 navigate('create')
               }}
+              statsForCourse={(courseId) => history.statsFor(`course:${courseId}`)}
               standaloneSlot={
                 library.quizzes.length > 0 ? (
                   <div className="mt-10 border-t border-slate-200 pt-8 dark:border-slate-800">

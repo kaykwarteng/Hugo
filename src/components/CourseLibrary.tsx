@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Chapter, Course, QuizQuestion, QuizSettings } from '../types/quiz'
+import type { Chapter, Course, HistoryStats, QuizQuestion, QuizSettings } from '../types/quiz'
 import type { ActiveSessionRecord } from '../services/api'
 import { ChapterDetail } from './ChapterDetail'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -48,6 +48,8 @@ interface CourseLibraryProps {
   activeSessions?: ActiveSessionRecord[]
   onResumeSession?: (record: ActiveSessionRecord) => void
   onDiscardSession?: (id: string) => void
+  /** Attempt stats for a course (keyed by course id). */
+  statsForCourse?: (courseId: string) => HistoryStats
   standaloneSlot?: React.ReactNode
 }
 
@@ -80,6 +82,18 @@ const CHAPTER_SORT_OPTIONS: { value: ChapterSort; label: string }[] = [
   { value: 'questions', label: 'Most questions' },
 ]
 
+const STATUS_LABEL = {
+  'not-started': 'Not started',
+  'in-progress': 'In progress',
+  completed: 'Completed',
+} as const
+
+const STATUS_CLASS = {
+  'not-started': 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+  'in-progress': 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400',
+  completed: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400',
+} as const
+
 function courseQuestionCount(course: Course) {
   return course.chapters.reduce((total, chapter) => total + chapter.questions.length, 0)
 }
@@ -111,6 +125,7 @@ export function CourseLibrary({
   activeSessions = [],
   onResumeSession,
   onDiscardSession,
+  statsForCourse,
   standaloneSlot,
 }: CourseLibraryProps) {
   const [view, setView] = useState<SubView>({ kind: 'list' })
@@ -815,6 +830,12 @@ export function CourseLibrary({
                   }
                 })()
               : null
+            const stats = statsForCourse?.(course.id)
+            const status = active
+              ? 'in-progress'
+              : stats && (stats.attempts > 0 || stats.latest !== null)
+                ? 'completed'
+                : 'not-started'
             const menuItems: CardMenuItem[] = []
             if (active && onResumeSession) {
               menuItems.push({
@@ -909,32 +930,56 @@ export function CourseLibrary({
                   </div>
                 </div>
 
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLASS[status]}`}>
+                    {STATUS_LABEL[status]}
+                  </span>
+                  {active && progress && (
+                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                      {progress.percent}% · {progress.answered}/{progress.total} answered
+                    </span>
+                  )}
+                </div>
+
                 {active && progress && (
-                  <>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-400">
-                        In progress
-                      </span>
-                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                        {progress.percent}% · {progress.answered}/{progress.total} answered
-                      </span>
-                    </div>
-                    <div className="mt-3">
+                  <div className="mt-3">
+                    <div
+                      role="progressbar"
+                      aria-valuenow={progress.percent}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`${course.name} progress`}
+                      className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+                    >
                       <div
-                        role="progressbar"
-                        aria-valuenow={progress.percent}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label={`${course.name} progress`}
-                        className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
-                      >
-                        <div
-                          className="h-full rounded-full bg-amber-500"
-                          style={{ width: `${progress.percent}%` }}
-                        />
-                      </div>
+                        className="h-full rounded-full bg-amber-500"
+                        style={{ width: `${progress.percent}%` }}
+                      />
                     </div>
-                  </>
+                  </div>
+                )}
+
+                {stats && stats.attempts > 0 && (
+                  <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                    {stats.latest !== null && (
+                      <div className="flex gap-1.5">
+                        <dt className="text-slate-500 dark:text-slate-400">Last score</dt>
+                        <dd className="font-semibold text-indigo-600 dark:text-indigo-400">
+                          {stats.latest}%
+                        </dd>
+                      </div>
+                    )}
+                    {stats.best !== null && (
+                      <div className="flex gap-1.5">
+                        <dt className="text-slate-500 dark:text-slate-400">Best</dt>
+                        <dd className="font-semibold">{stats.best}%</dd>
+                      </div>
+                    )}
+                    <div className="flex gap-1.5">
+                      <dt className="text-slate-500 dark:text-slate-400">Attempts</dt>
+                      <dd className="font-semibold">{stats.attempts}</dd>
+                    </div>
+                  </dl>
                 )}
 
                 <div className="relative z-10 mt-auto pt-4">
