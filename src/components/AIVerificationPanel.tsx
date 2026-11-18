@@ -14,7 +14,7 @@ import { toggleOption } from '../utils/quiz'
 import { AI_DISCLAIMER } from './aiDisclaimer'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Spinner } from './Spinner'
-import { IconSparkles } from './icons/Icons'
+import { IconSparkles, IconCheckCircle2, IconAlertTriangle, IconHelpCircle, IconXCircle } from './icons/Icons'
 
 interface AIVerificationPanelProps {
   questions: QuizQuestion[]
@@ -26,22 +26,29 @@ interface AIVerificationPanelProps {
 /** Verifying more than this in one go gets a confirmation first. */
 const CONFIRM_THRESHOLD = 10
 
-const STATUS_STYLE: Record<AIVerificationStatus, { label: string; className: string }> = {
+const STATUS_STYLE: Record<
+  AIVerificationStatus,
+  { label: string; className: string; Icon: typeof IconCheckCircle2 }
+> = {
   agrees: {
-    label: '✓ Looks right',
+    label: 'Looks right',
     className: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400',
+    Icon: IconCheckCircle2,
   },
   disagrees: {
-    label: '⚠ Possible wrong answer',
+    label: 'Possible wrong answer',
     className: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
+    Icon: IconAlertTriangle,
   },
   uncertain: {
-    label: '? AI is unsure',
+    label: 'AI is unsure',
     className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+    Icon: IconHelpCircle,
   },
   invalid: {
-    label: '✗ Question looks broken',
+    label: 'Question looks broken',
     className: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400',
+    Icon: IconXCircle,
   },
 }
 
@@ -162,14 +169,15 @@ export function AIVerificationPanel({ questions, ai, onApply }: AIVerificationPa
         <p className="mt-4 flex flex-wrap gap-2 text-xs">
           {(Object.keys(STATUS_STYLE) as AIVerificationStatus[])
             .filter((status) => summary[status] > 0)
-            .map((status) => (
-              <span
-                key={status}
-                className={`rounded-full px-3 py-1 font-medium ${STATUS_STYLE[status].className}`}
-              >
-                {summary[status]} {STATUS_STYLE[status].label}
-              </span>
-            ))}
+            .map((status) => {
+              const { label, className, Icon } = STATUS_STYLE[status]
+              return (
+                <span key={status} className={`inline-flex items-center gap-1 rounded-full px-3 py-1 font-medium ${className}`}>
+                  <Icon size={12} />
+                  {summary[status]} {label}
+                </span>
+              )
+            })}
         </p>
       )}
 

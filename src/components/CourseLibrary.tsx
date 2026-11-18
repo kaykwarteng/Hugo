@@ -251,7 +251,7 @@ export function CourseLibrary({
       <div className="space-y-4">
         <Breadcrumbs
           items={[
-            { label: 'My Library', onClick: () => navigate({ kind: 'list' }) },
+            { label: 'Courses Library', onClick: () => navigate({ kind: 'list' }) },
             { label: course.name, onClick: () => navigate({ kind: 'course', courseId: course.id }) },
             { label: 'Quiz setup' },
           ]}
@@ -288,7 +288,7 @@ export function CourseLibrary({
       <div className="space-y-4">
         <Breadcrumbs
           items={[
-            { label: 'My Library', onClick: () => navigate({ kind: 'list' }) },
+            { label: 'Courses Library', onClick: () => navigate({ kind: 'list' }) },
             { label: course.name, onClick: () => navigate({ kind: 'course', courseId: course.id }) },
             { label: chapter.title },
           ]}
@@ -329,7 +329,7 @@ export function CourseLibrary({
       <div className="space-y-6">
         <Breadcrumbs
           items={[
-            { label: 'My Library', onClick: () => navigate({ kind: 'list' }) },
+            { label: 'Courses Library', onClick: () => navigate({ kind: 'list' }) },
             { label: course.name },
           ]}
         />
@@ -489,6 +489,17 @@ export function CourseLibrary({
                     session.chapterIds?.length === 1 &&
                     session.chapterIds[0] === chapter.id,
                 )
+                const progress = active
+                  ? (() => {
+                      const total = active.session.questions.length
+                      const answered = Object.keys(active.session.answers).length
+                      return {
+                        answered,
+                        total,
+                        percent: total === 0 ? 0 : Math.round((answered / total) * 100),
+                      }
+                    })()
+                  : null
                 const menuItems: CardMenuItem[] = []
                 if (active && onResumeSession) {
                   menuItems.push({
@@ -563,12 +574,6 @@ export function CourseLibrary({
                               <IconFileQuestion size={14} />
                               {plural(chapter.questions.length, 'question')}
                             </span>
-                            {active && (
-                              <span className="inline-flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
-                                <span className="size-1.5 rounded-full bg-current" />
-                                In progress
-                              </span>
-                            )}
                           </p>
                         </div>
                       </div>
@@ -585,6 +590,35 @@ export function CourseLibrary({
                         <CardMenu label={`Actions for ${chapter.title}`} items={menuItems} />
                       </div>
                     </div>
+
+                    {active && progress && (
+                      <>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-400">
+                            In progress
+                          </span>
+                          <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                            {progress.percent}% · {progress.answered}/{progress.total} answered
+                          </span>
+                        </div>
+                        <div className="mt-3">
+                          <div
+                            role="progressbar"
+                            aria-valuenow={progress.percent}
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-label={`${chapter.title} progress`}
+                            className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+                          >
+                            <div
+                              className="h-full rounded-full bg-amber-500"
+                              style={{ width: `${progress.percent}%` }}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
                     <div className="relative z-10 mt-auto pt-4">
                       {active ? (
                         <button
@@ -655,7 +689,7 @@ export function CourseLibrary({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-            My Library
+            Courses Library
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {courses.length === 0
@@ -770,6 +804,17 @@ export function CourseLibrary({
           {sortedCourses.map((course) => {
             const questionCount = courseQuestionCount(course)
             const active = activeSessions.find((session) => session.courseId === course.id)
+            const progress = active
+              ? (() => {
+                  const total = active.session.questions.length
+                  const answered = Object.keys(active.session.answers).length
+                  return {
+                    answered,
+                    total,
+                    percent: total === 0 ? 0 : Math.round((answered / total) * 100),
+                  }
+                })()
+              : null
             const menuItems: CardMenuItem[] = []
             if (active && onResumeSession) {
               menuItems.push({
@@ -847,12 +892,6 @@ export function CourseLibrary({
                           <IconFileQuestion size={14} />
                           {plural(questionCount, 'question')}
                         </span>
-                        {active && (
-                          <span className="inline-flex items-center gap-1 font-medium text-amber-600 dark:text-amber-400">
-                            <span className="size-1.5 rounded-full bg-current" />
-                            In progress
-                          </span>
-                        )}
                       </p>
                     </div>
                   </div>
@@ -869,6 +908,35 @@ export function CourseLibrary({
                     <CardMenu label={`Actions for ${course.name}`} items={menuItems} />
                   </div>
                 </div>
+
+                {active && progress && (
+                  <>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950 dark:text-amber-400">
+                        In progress
+                      </span>
+                      <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                        {progress.percent}% · {progress.answered}/{progress.total} answered
+                      </span>
+                    </div>
+                    <div className="mt-3">
+                      <div
+                        role="progressbar"
+                        aria-valuenow={progress.percent}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`${course.name} progress`}
+                        className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+                      >
+                        <div
+                          className="h-full rounded-full bg-amber-500"
+                          style={{ width: `${progress.percent}%` }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <div className="relative z-10 mt-auto pt-4">
                   {active ? (
                     <button

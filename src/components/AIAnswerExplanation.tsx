@@ -4,7 +4,7 @@ import type { QuizQuestion } from '../types/quiz'
 import { AI_DISCLAIMER, AI_UNCERTAIN_NOTE } from './aiDisclaimer'
 import { Spinner } from './Spinner'
 import { MathText } from './MathText'
-import { IconSparkles } from './icons/Icons'
+import { IconSparkles, IconCheckCircle2, IconAlertTriangle } from './icons/Icons'
 
 interface AIAnswerExplanationProps {
   question: QuizQuestion
@@ -88,15 +88,23 @@ export function AIAnswerExplanation({
             AI evaluation
           </span>
           <span
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
+            className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
               explanation.agreesWithSource
                 ? 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400'
                 : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400'
             }`}
           >
-            {explanation.agreesWithSource
-              ? '✓ Agrees with the source answer'
-              : '⚠ Disagrees with the source answer'}
+            {explanation.agreesWithSource ? (
+              <>
+                <IconCheckCircle2 size={12} />
+                Agrees with the source answer
+              </>
+            ) : (
+              <>
+                <IconAlertTriangle size={12} />
+                Disagrees with the source answer
+              </>
+            )}
           </span>
           {uncertain && (
             <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">

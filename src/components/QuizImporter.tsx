@@ -3,6 +3,7 @@ import type { UseAI } from '../hooks/useAI'
 import type { QuizQuestion } from '../types/quiz'
 import { JsonUploader } from './JsonUploader'
 import { TextUploader } from './TextUploader'
+import { IconFileText } from './icons/Icons'
 
 interface QuizImporterProps {
   onLoad: (questions: QuizQuestion[]) => void
@@ -46,7 +47,10 @@ export function QuizImporter({ onLoad, ai }: QuizImporterProps) {
           onClick={() => setMode('text')}
           className={tabClass(mode === 'text')}
         >
-          📝 Plain text
+          <span className="inline-flex items-center gap-1.5">
+            <IconFileText size={16} />
+            Plain text
+          </span>
         </button>
         <button
           type="button"

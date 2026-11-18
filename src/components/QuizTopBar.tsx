@@ -1,4 +1,5 @@
 import { formatTime } from '../utils/quiz'
+import { IconClock } from './icons/Icons'
 
 interface QuizTopBarProps {
   title: string
@@ -46,13 +47,14 @@ export function QuizTopBar({
         {remaining !== null && (
           <span
             aria-label="Time remaining"
-            className={`shrink-0 rounded-lg px-2 py-1 font-mono text-sm font-semibold tabular-nums ${
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 font-mono text-sm font-semibold tabular-nums ${
               urgent
                 ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400'
                 : 'text-slate-600 dark:text-slate-400'
             }`}
           >
-            ⏱ {formatTime(remaining)}
+            <IconClock size={14} />
+            {formatTime(remaining)}
           </span>
         )}
 

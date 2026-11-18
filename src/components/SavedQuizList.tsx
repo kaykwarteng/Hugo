@@ -14,6 +14,8 @@ interface SavedQuizListProps {
   onResume: (quiz: SavedQuiz) => void
   /** Throw away an unfinished run and start from question 1. */
   onStartOver: (quiz: SavedQuiz) => void
+  /** Discard an unfinished run without starting over. */
+  onDiscardProgress: (quiz: SavedQuiz) => void
   /** Open the quiz to view and edit its questions. */
   onOpen: (quiz: SavedQuiz) => void
   onViewResults: (quiz: SavedQuiz) => void
@@ -30,6 +32,7 @@ export function SavedQuizList({
   onStart,
   onResume,
   onStartOver,
+  onDiscardProgress,
   onOpen,
   onViewResults,
   onRename,
@@ -48,13 +51,8 @@ export function SavedQuizList({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 id="library-heading" className="text-xl font-bold tracking-tight">
-            Quiz Library
+            Standalone Quiz Library
           </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {quizzes.length === 0
-              ? 'Saved in this browser only'
-              : `${quizzes.length} quiz${quizzes.length === 1 ? '' : 'zes'} saved in this browser`}
-          </p>
         </div>
         <button
           type="button"
@@ -95,6 +93,7 @@ export function SavedQuizList({
                 stats={stats}
                 onPrimary={() => (status === 'in-progress' ? onResume(quiz) : onStart(quiz))}
                 onStartOver={() => setPendingStartOver(quiz)}
+                onDiscardProgress={() => onDiscardProgress(quiz)}
                 onOpen={() => onOpen(quiz)}
                 onViewResults={() => onViewResults(quiz)}
                 onRename={() => setPendingRename(quiz)}

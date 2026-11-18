@@ -3,6 +3,7 @@ import { formatRelativeDay, progressSummary } from '../utils/library'
 import { getCategories } from '../utils/quiz'
 import type { MenuAction } from './OverflowMenu'
 import { OverflowMenu } from './OverflowMenu'
+import { IconEdit, IconPlay } from './icons/Icons'
 
 interface SavedQuizCardProps {
   quiz: SavedQuiz
@@ -12,6 +13,8 @@ interface SavedQuizCardProps {
   onPrimary: () => void
   /** Restart from question 1, discarding an unfinished run. */
   onStartOver: () => void
+  /** Discard an unfinished run without starting over. */
+  onDiscardProgress: () => void
   /** Open the quiz to view and edit its questions. */
   onOpen: () => void
   onViewResults: () => void
@@ -32,17 +35,13 @@ const STATUS_CLASS: Record<AttemptStatus, string> = {
 }
 
 const PRIMARY_LABEL: Record<AttemptStatus, string> = {
-  'not-started': 'Start',
-  'in-progress': 'Continue',
+  'not-started': 'Start quiz',
+  'in-progress': 'Continue quiz',
   completed: 'Start again',
 }
 
 /**
- * One quiz in the library: what it is, how it went, and what to do next.
- *
- * Exactly one action is a button — the one the status implies. Everything
- * else sits in the overflow menu, so the card reads as a quiz rather than as
- * a toolbar.
+ * One quiz in the library, styled consistently with course/chapter cards.
  */
 export function SavedQuizCard({
   quiz,
@@ -50,6 +49,7 @@ export function SavedQuizCard({
   stats,
   onPrimary,
   onStartOver,
+  onDiscardProgress,
   onOpen,
   onViewResults,
   onRename,
@@ -60,9 +60,12 @@ export function SavedQuizCard({
   const progress = quiz.progress ? progressSummary(quiz.progress) : null
 
   const actions: MenuAction[] = [
-    // Only meaningful while a run is unfinished — otherwise the primary
-    // button already starts from the beginning.
-    ...(status === 'in-progress' ? [{ label: 'Start again', onSelect: onStartOver }] : []),
+    ...(status === 'in-progress'
+      ? [
+          { label: 'Start again', onSelect: onStartOver },
+          { label: 'Discard in-progress quiz', onSelect: onDiscardProgress },
+        ]
+      : []),
     {
       label: 'View results',
       onSelect: onViewResults,
@@ -82,18 +85,39 @@ export function SavedQuizCard({
         className="absolute inset-0 z-0 rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
       />
       <div className="flex items-start justify-between gap-3">
-        <h3 className="font-semibold leading-snug break-words group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-          {quiz.name}
-        </h3>
-        <span className={`relative z-10 shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLASS[status]}`}>
-          {STATUS_LABEL[status]}
-        </span>
+        <div className="min-w-0">
+          <h3 className="font-semibold leading-snug break-words group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+            {quiz.name}
+          </h3>
+          <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
+            {quiz.questions.length} question{quiz.questions.length === 1 ? '' : 's'} · Updated{' '}
+            {formatRelativeDay(quiz.updatedAt)}
+          </p>
+        </div>
+        <div className="relative z-10 flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label={`Edit quiz ${quiz.name}`}
+            title="View and edit questions"
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+          >
+            <IconEdit size={15} />
+          </button>
+          <OverflowMenu label={`More actions for ${quiz.name}`} actions={actions} />
+        </div>
       </div>
 
-      <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
-        {quiz.questions.length} question{quiz.questions.length === 1 ? '' : 's'} · Updated{' '}
-        {formatRelativeDay(quiz.updatedAt)}
-      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLASS[status]}`}>
+          {STATUS_LABEL[status]}
+        </span>
+        {progress !== null && (
+          <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
+            {progress.percent}% · {progress.answered}/{progress.total} answered
+          </span>
+        )}
+      </div>
 
       {shownCategories.length > 0 && (
         <ul aria-label="Categories" className="mt-3 flex flex-wrap gap-1.5">
@@ -115,16 +139,13 @@ export function SavedQuizCard({
 
       {progress !== null && (
         <div className="mt-3">
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            Progress: {progress.percent}% · {progress.answered}/{progress.total} answered
-          </p>
           <div
             role="progressbar"
             aria-valuenow={progress.percent}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-label={`${quiz.name} progress`}
-            className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
+            className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-800"
           >
             <div className="h-full rounded-full bg-amber-500" style={{ width: `${progress.percent}%` }} />
           </div>
@@ -152,15 +173,16 @@ export function SavedQuizCard({
         )}
       </dl>
 
-      <div className="relative z-10 mt-auto flex items-center gap-2 pt-4">
+      <div className="relative z-10 mt-auto pt-4">
         <button
           type="button"
           onClick={onPrimary}
-          className="min-h-11 flex-1 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 sm:flex-none"
+          disabled={quiz.questions.length === 0}
+          className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 transition-colors hover:border-indigo-300 hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-40 dark:border-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-300 dark:hover:bg-indigo-500/20"
         >
+          <IconPlay size={15} />
           {PRIMARY_LABEL[status]}
         </button>
-        <OverflowMenu label={`More actions for ${quiz.name}`} actions={actions} />
       </div>
     </li>
   )

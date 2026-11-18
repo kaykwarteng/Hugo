@@ -8,7 +8,7 @@ import { AI_FORMATTING_MAX_CHARS } from '../utils/ai/buildAIFormattingPrompt'
 import { parseMcqText } from '../utils/parseMcqText'
 import { isMultiAnswer } from '../utils/quiz'
 import { Spinner } from './Spinner'
-import { IconSparkles } from './icons/Icons'
+import { IconSparkles, IconUndo2, IconXCircle, IconAlertTriangle } from './icons/Icons'
 
 interface TextUploaderProps {
   onLoad: (questions: QuizQuestion[]) => void
@@ -157,9 +157,10 @@ export function TextUploader({ onLoad, ai }: TextUploaderProps) {
               <button
                 type="button"
                 onClick={undoFormat}
-                className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
               >
-                ↩ Undo AI formatting
+                <IconUndo2 size={14} />
+                Undo AI formatting
               </button>
             )}
             {tooLong && (
@@ -273,7 +274,14 @@ export function TextUploader({ onLoad, ai }: TextUploaderProps) {
               }
             >
               <span className="font-mono text-xs opacity-70">L{issue.line}</span>{' '}
-              {issue.severity === 'error' ? '✗' : '⚠'} {issue.message}
+              <span className="inline-flex items-center gap-1 align-middle">
+                {issue.severity === 'error' ? (
+                  <IconXCircle size={14} className="shrink-0" />
+                ) : (
+                  <IconAlertTriangle size={14} className="shrink-0" />
+                )}
+                {issue.message}
+              </span>
             </p>
           ))}
         </div>

@@ -10,7 +10,7 @@ import {
 } from '../utils/appearance'
 import { SOUND_OPTIONS } from '../utils/sound'
 import { Modal } from './Modal'
-import { IconSparkles } from './icons/Icons'
+import { IconSparkles, IconVolume2 } from './icons/Icons'
 
 interface SettingsDialogProps {
   theme: Theme
@@ -203,8 +203,9 @@ export function SettingsDialog({
             the Reset link above would otherwise sweep sound up, and resetting
             the *look* of the app must never unmute it. */}
         <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-          <h3 id={soundLabelId} className="text-sm font-semibold">
-            🔊 Sound effects
+          <h3 id={soundLabelId} className="inline-flex items-center gap-2 text-sm font-semibold">
+            <IconVolume2 size={16} />
+            Sound effects
           </h3>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {soundSupported

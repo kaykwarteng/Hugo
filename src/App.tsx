@@ -586,18 +586,13 @@ export default function App() {
               standaloneSlot={
                 library.quizzes.length > 0 ? (
                   <div className="mt-10 border-t border-slate-200 pt-8 dark:border-slate-800">
-                    <h2 className="mb-1 text-lg font-semibold text-slate-900 dark:text-slate-100">
-                      Standalone quizzes
-                    </h2>
-                    <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-                      Quizzes saved from Create Quiz. Click a quiz to view and edit its questions.
-                    </p>
                     <SavedQuizList
                       quizzes={library.quizzes}
                       statsFor={history.statsFor}
                       onStart={(saved) => openSetup(saved.questions, saved)}
                       onResume={handleResume}
                       onStartOver={handleStartOver}
+                      onDiscardProgress={(saved) => library.clearProgress(saved.id)}
                       onOpen={(saved) => setOpenQuizId(saved.id)}
                       onViewResults={(saved) => setHistoryQuizId(saved.id)}
                       onRename={handleRename}

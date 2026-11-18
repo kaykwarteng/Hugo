@@ -6,7 +6,7 @@ import type { QuizQuestion } from '../types/quiz'
 import { AI_JSON_REPAIR_MAX_CHARS } from '../utils/ai/buildAIJsonRepairPrompt'
 import { parseQuizJson } from '../utils/quiz'
 import { Spinner } from './Spinner'
-import { IconSparkles } from './icons/Icons'
+import { IconSparkles, IconUndo2 } from './icons/Icons'
 
 interface JsonUploaderProps {
   onLoad: (questions: QuizQuestion[]) => void
@@ -151,9 +151,10 @@ export function JsonUploader({ onLoad, ai }: JsonUploaderProps) {
               <button
                 type="button"
                 onClick={undoRepair}
-                className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400"
               >
-                ↩ Undo AI fix
+                <IconUndo2 size={14} />
+                Undo AI fix
               </button>
             )}
             {tooLong && (
