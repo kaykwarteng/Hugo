@@ -5,14 +5,18 @@ import App from './App'
 import { loadAppearance } from './services/storage'
 import { applyAppearance } from './utils/appearance'
 
-// Applied before the first render so the app never paints at the default font
-// size and then jumps. Deliberately not an inline script in index.html: that
-// would put a storage key outside services/storage.ts. `useAppearance` re-applies
-// the same values in its effect, which is a no-op.
-applyAppearance(document.documentElement, loadAppearance())
+async function bootstrap() {
+  try {
+    applyAppearance(document.documentElement, await loadAppearance())
+  } catch {
+    // DB/API may be offline on first paint; defaults remain applied via CSS.
+  }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  )
+}
+
+void bootstrap()

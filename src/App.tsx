@@ -30,8 +30,8 @@ import { useTheme } from './hooks/useTheme'
 import { useTimer } from './hooks/useTimer'
 import { PROVIDERS } from './services/ai/models'
 import { isSoundSupported, playSound } from './services/sound'
-import { isStorageAvailable, recordMasteryOutcome, masteryKey } from './services/storage'
-import { apiDeleteSession, apiListSessions, apiUpsertSession, type ActiveSessionRecord } from './services/api'
+import { masteryKey } from './services/storage'
+import { apiDeleteSession, apiListSessions, apiRecordMastery, apiUpsertSession, type ActiveSessionRecord } from './services/api'
 import type { AIRequestKind } from './types/ai'
 import type { View } from './types/navigation'
 import type { QuizAttempt, QuizQuestion, QuizSession, SavedQuiz } from './types/quiz'
@@ -94,7 +94,6 @@ export default function App() {
   const [historyQuizId, setHistoryQuizId] = useState<string | null>(null)
   const [openQuizId, setOpenQuizId] = useState<string | null>(null)
   const [reviewAttempt, setReviewAttempt] = useState<QuizAttempt | null>(null)
-  const [storageAvailable] = useState(isStorageAvailable)
   // Checks for the constructor only — asking never creates an AudioContext.
   const [soundSupported] = useState(isSoundSupported)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -106,51 +105,62 @@ export default function App() {
   const { recordSession, refresh: refreshHistory } = history
 
   // Mirror an in-progress run onto its saved quiz so the library can show it
-  // as "In progress" and resume it later.
+  // as "In progress" and resume it later (debounced).
   useEffect(() => {
-    if (session && session.status === 'active' && session.quizId) saveProgress(session)
+    if (!session || session.status !== 'active' || !session.quizId) return
+    const timer = window.setTimeout(() => {
+      void saveProgress(session).catch(() => {})
+    }, 400)
+    return () => window.clearTimeout(timer)
   }, [session, saveProgress])
 
-  // Persist in-progress course/chapter runs to SQLite so they can be resumed.
+  // Persist in-progress course/chapter runs to SQLite so they can be resumed (debounced).
   useEffect(() => {
     if (!session || session.status !== 'active' || !session.quizId?.startsWith('course:')) return
     const meta = courseSessionMetaRef.current[session.quizId] ?? {
       courseId: session.quizId.slice('course:'.length).split(':')[0],
       chapterIds: [],
     }
-    void apiUpsertSession({
-      id: session.quizId,
-      courseId: meta.courseId,
-      chapterIds: meta.chapterIds,
-      quizName: session.quizName,
-      session,
-    })
-      .then(() => refreshCourseSessions())
-      .catch(() => {
-        /* API offline — localStorage session still covers refresh */
+    const timer = window.setTimeout(() => {
+      void apiUpsertSession({
+        id: session.quizId!,
+        courseId: meta.courseId,
+        chapterIds: meta.chapterIds,
+        quizName: session.quizName,
+        session,
       })
+        .then(() => refreshCourseSessions())
+        .catch(() => {
+          /* API offline */
+        })
+    }, 400)
+    return () => window.clearTimeout(timer)
   }, [session, refreshCourseSessions])
 
-  // Convert a submitted session into a permanent result, exactly once per
-  // attempt (the ref guards re-renders; storage guards reloads).
+  // Convert a submitted session into a permanent result, exactly once per attempt.
   const recordedRef = useRef<Set<string>>(new Set())
   useEffect(() => {
     if (!session || session.status !== 'finished') return
     if (recordedRef.current.has(session.attemptId)) return
     recordedRef.current.add(session.attemptId)
-    const attempt = recordSession(session)
-    if (session.quizId) completeProgress(session.quizId, attempt.id)
-    if (session.quizId?.startsWith('course:')) {
-      void apiDeleteSession(session.quizId).then(setCourseSessions).catch(() => {})
-    }
-    // Update spaced-repetition mastery for answered questions
-    const scope = session.quizId ?? session.attemptId
-    for (const q of session.questions) {
-      const ans = session.answers[q.id]
-      if (ans === undefined) continue
-      const correct = checkAnswerCorrect(q, ans)
-      recordMasteryOutcome(masteryKey(scope, q.id), q.id, correct)
-    }
+    void (async () => {
+      try {
+        const attempt = await recordSession(session)
+        if (session.quizId) await completeProgress(session.quizId, attempt.id)
+        if (session.quizId?.startsWith('course:')) {
+          await apiDeleteSession(session.quizId).then(setCourseSessions).catch(() => {})
+        }
+        const scope = session.quizId ?? session.attemptId
+        for (const q of session.questions) {
+          const ans = session.answers[q.id]
+          if (ans === undefined) continue
+          const correct = checkAnswerCorrect(q, ans)
+          await apiRecordMastery(masteryKey(scope, q.id), q.id, correct).catch(() => {})
+        }
+      } catch {
+        recordedRef.current.delete(session.attemptId)
+      }
+    })()
   }, [session, recordSession, completeProgress])
 
   // Every screen change starts at the top. Without this a tall screen (a long
@@ -217,7 +227,7 @@ export default function App() {
   /** Throw away an unfinished run and configure a fresh one. */
   const handleStartOver = useCallback(
     (saved: SavedQuiz) => {
-      library.clearProgress(saved.id)
+      void library.clearProgress(saved.id).catch(() => {})
       openSetup(saved.questions, saved)
     },
     [library, openSetup],
@@ -225,32 +235,33 @@ export default function App() {
 
   const handleRename = useCallback(
     (saved: SavedQuiz, name: string) => {
-      library.renameQuiz(saved.id, name)
-      if (pendingQuiz?.id === saved.id) setPendingQuiz({ ...pendingQuiz, name: name.trim() })
+      void library.renameQuiz(saved.id, name).then(() => {
+        if (pendingQuiz?.id === saved.id) setPendingQuiz((current) => (current?.id === saved.id ? { ...current, name: name.trim() } : current))
+      }).catch(() => {})
     },
     [library, pendingQuiz],
   )
 
   const handleDeleteQuiz = useCallback(
     (saved: SavedQuiz) => {
-      library.removeQuiz(saved.id)
-      // Storage drops the quiz's attempts with it — resync the history state.
-      refreshHistory()
-      if (historyQuizId === saved.id) setHistoryQuizId(null)
-      if (openQuizId === saved.id) setOpenQuizId(null)
-      if (reviewAttempt?.quizId === saved.id) setReviewAttempt(null)
-      if (session?.quizId === saved.id) resetQuiz()
-      if (pendingQuiz?.id === saved.id) clearSetup()
+      void library.removeQuiz(saved.id).then(() => {
+        void refreshHistory()
+        if (historyQuizId === saved.id) setHistoryQuizId(null)
+        if (openQuizId === saved.id) setOpenQuizId(null)
+        if (reviewAttempt?.quizId === saved.id) setReviewAttempt(null)
+        if (session?.quizId === saved.id) resetQuiz()
+        if (pendingQuiz?.id === saved.id) clearSetup()
+      }).catch(() => {})
     },
     [library, refreshHistory, historyQuizId, openQuizId, reviewAttempt, session, resetQuiz, pendingQuiz, clearSetup],
   )
 
   const handleDeleteAttempt = useCallback(
     (attempt: QuizAttempt) => {
-      history.removeAttempt(attempt.id)
-      if (reviewAttempt?.id === attempt.id) setReviewAttempt(null)
-      // The quiz may have pointed at this attempt as its latest.
-      refreshLibrary()
+      void history.removeAttempt(attempt.id).then(() => {
+        if (reviewAttempt?.id === attempt.id) setReviewAttempt(null)
+        void refreshLibrary()
+      }).catch(() => {})
     },
     [history, reviewAttempt, refreshLibrary],
   )
@@ -339,7 +350,6 @@ export default function App() {
             setSettingsOpen(false)
             setAiSettingsOpen(true)
           }}
-          storageAvailable={storageAvailable}
           onClose={() => setSettingsOpen(false)}
         />
       )}
@@ -413,20 +423,20 @@ export default function App() {
             quiz={openQuiz}
             onBack={() => setOpenQuizId(null)}
             onStart={() => openSetup(openQuiz.questions, openQuiz)}
-            onAddQuestion={(q) => library.updateQuiz(openQuiz.id, [...openQuiz.questions, q])}
-            onAddQuestions={(qs) => library.updateQuiz(openQuiz.id, [...openQuiz.questions, ...qs])}
-            onUpdateQuestion={(q) =>
-              library.updateQuiz(
+            onAddQuestion={(q) => { void library.updateQuiz(openQuiz.id, [...openQuiz.questions, q]).catch(() => {}) }}
+            onAddQuestions={(qs) => { void library.updateQuiz(openQuiz.id, [...openQuiz.questions, ...qs]).catch(() => {}) }}
+            onUpdateQuestion={(q) => {
+              void library.updateQuiz(
                 openQuiz.id,
                 openQuiz.questions.map((x) => (x.id === q.id ? q : x)),
-              )
-            }
-            onDeleteQuestion={(questionId) =>
-              library.updateQuiz(
+              ).catch(() => {})
+            }}
+            onDeleteQuestion={(questionId) => {
+              void library.updateQuiz(
                 openQuiz.id,
                 openQuiz.questions.filter((q) => q.id !== questionId),
-              )
-            }
+              ).catch(() => {})
+            }}
             nextQuestionId={openQuiz.questions.reduce((max, q) => Math.max(max, q.id), 0) + 1}
           />
         )}
@@ -491,14 +501,16 @@ export default function App() {
                   questionCount={pendingQuestions.length}
                   duplicate={pendingQuiz ?? library.findSavedDuplicate(pendingQuestions)}
                   savedName={pendingQuiz?.name ?? null}
-                  storageAvailable={storageAvailable}
-                  // Same meaning as saving a result to the library, so the
-                  // same tone. An update isn't a new filing, so it stays quiet.
-                  onSave={(name) => {
+                  disabled={library.loading}
+                  onSave={async (name) => {
+                    const saved = await library.saveQuiz(name, pendingQuestions)
                     playSound('save')
-                    setPendingQuiz(library.saveQuiz(name, pendingQuestions))
+                    setPendingQuiz(saved)
                   }}
-                  onUpdate={(quizId) => setPendingQuiz(library.updateQuiz(quizId, pendingQuestions))}
+                  onUpdate={async (quizId) => {
+                    const saved = await library.updateQuiz(quizId, pendingQuestions)
+                    if (saved) setPendingQuiz(saved)
+                  }}
                 />
                 <AIVerificationPanel
                   questions={pendingQuestions}
@@ -524,16 +536,16 @@ export default function App() {
         {/* 5. Quiz Library — hierarchical courses + standalone quizzes. */}
         {reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view === 'library' && (
           <div className="space-y-10">
-            {coursesApi.error && (
+            {(coursesApi.error || library.error || history.error) && (
               <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                <strong>Database offline.</strong> {coursesApi.error}
+                <strong>Database offline.</strong> {coursesApi.error ?? library.error ?? history.error}
                 <span className="mt-1 block text-xs opacity-80">
-                  Start the API with <code className="rounded bg-black/5 px-1">npm run server</code> (SQLite at data/drillmcq.sqlite), then refresh.
+                  Start the API with <code className="rounded bg-black/5 px-1">npm run server</code> (SQLite at data/hugo.sqlite), then refresh.
                 </span>
               </div>
             )}
-            {coursesApi.loading && !coursesApi.error && (
-              <p className="text-sm text-slate-500">Loading courses from database…</p>
+            {(coursesApi.loading || library.loading || history.loading) && !(coursesApi.error || library.error || history.error) && (
+              <p className="text-sm text-slate-500">Loading library from database…</p>
             )}
             <CourseLibrary
               courses={coursesApi.courses}
@@ -593,7 +605,7 @@ export default function App() {
                       onStart={(saved) => openSetup(saved.questions, saved)}
                       onResume={handleResume}
                       onStartOver={handleStartOver}
-                      onDiscardProgress={(saved) => library.clearProgress(saved.id)}
+                      onDiscardProgress={(saved) => { void library.clearProgress(saved.id).catch(() => {}) }}
                       onOpen={(saved) => setOpenQuizId(saved.id)}
                       onViewResults={(saved) => setHistoryQuizId(saved.id)}
                       onRename={handleRename}

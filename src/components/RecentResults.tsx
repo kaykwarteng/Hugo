@@ -19,7 +19,7 @@ interface RecentResultsProps {
    * Files the attempt's questions in the Quiz Library. Omitted only if a caller
    * wants a read-only list; when omitted the menu item isn't offered at all.
    */
-  onSaveToLibrary?: (attempt: QuizAttempt) => SaveAttemptResult
+  onSaveToLibrary?: (attempt: QuizAttempt) => Promise<SaveAttemptResult> | SaveAttemptResult
   /** Whether this attempt's questions are already in the library. */
   isInLibrary?: (attempt: QuizAttempt) => boolean
   heading?: string
@@ -65,12 +65,14 @@ export function RecentResults({
 
   const handleSave = (attempt: QuizAttempt) => {
     if (onSaveToLibrary === undefined) return
-    const outcome = onSaveToLibrary(attempt)
-    // Only a real save sounds. "Already saved" changed nothing, and the menu
-    // item is disabled in that state anyway — a tone there would only ever
-    // accompany a race.
-    if (outcome.status === 'saved') playSound('save')
-    setFeedback(outcome)
+    void Promise.resolve(onSaveToLibrary(attempt))
+      .then((outcome) => {
+        if (outcome.status === 'saved') playSound('save')
+        setFeedback(outcome)
+      })
+      .catch(() => {
+        /* ignore; parent surfaces DB errors */
+      })
   }
 
   /**

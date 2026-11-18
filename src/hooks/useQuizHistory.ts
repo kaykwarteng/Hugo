@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { HistoryStats, QuizAttempt, QuizSession } from '../types/quiz'
-import { appendAttempt, deleteAttempt, loadAttempts } from '../services/storage'
+import { apiAppendAttempt, apiDeleteAttempt, apiListAttempts } from '../services/api'
 import {
   attemptsForQuiz,
   computeHistoryStats,
@@ -8,38 +8,40 @@ import {
   sortAttemptsByRecency,
 } from '../utils/library'
 
-/**
- * Local history of completed attempts. Append-only from the user's point of
- * view — retaking a quiz adds a record, it never replaces one.
- */
 export function useQuizHistory() {
-  const [attempts, setAttempts] = useState<QuizAttempt[]>(() => loadAttempts())
+  const [attempts, setAttempts] = useState<QuizAttempt[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const refresh = useCallback(() => {
-    setAttempts(loadAttempts())
+  const refresh = useCallback(async () => {
+    try {
+      setError(null)
+      setAttempts(await apiListAttempts())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load attempts')
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  /**
-   * Record a submitted session. Idempotent on the session's attempt id, so
-   * re-running the finish effect can't create a duplicate. Returns the
-   * attempt that is now stored.
-   */
-  const recordSession = useCallback((session: QuizSession): QuizAttempt => {
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const recordSession = useCallback(async (session: QuizSession): Promise<QuizAttempt> => {
     const attempt = sessionToAttempt(session, session.finishedAt ?? Date.now())
-    setAttempts(appendAttempt(attempt))
+    const list = await apiAppendAttempt(attempt)
+    setAttempts(list)
     return attempt
   }, [])
 
-  const removeAttempt = useCallback((id: string): void => {
-    setAttempts(deleteAttempt(id))
+  const removeAttempt = useCallback(async (id: string): Promise<void> => {
+    const list = await apiDeleteAttempt(id)
+    setAttempts(list)
   }, [])
 
-  const hasAttempt = useCallback(
-    (id: string): boolean => attempts.some((a) => a.id === id),
-    [attempts],
-  )
+  const hasAttempt = useCallback((id: string): boolean => attempts.some((a) => a.id === id), [attempts])
 
-  /** Attempts for one saved quiz, newest first. */
   const forQuiz = useCallback(
     (quizId: string): QuizAttempt[] => attemptsForQuiz(attempts, quizId),
     [attempts],
@@ -50,11 +52,10 @@ export function useQuizHistory() {
     [attempts],
   )
 
-  /** Everything, newest first — used for the "recent results" strip. */
   const recent = useCallback(
     (limit: number): QuizAttempt[] => sortAttemptsByRecency(attempts).slice(0, limit),
     [attempts],
   )
 
-  return { attempts, refresh, recordSession, removeAttempt, hasAttempt, forQuiz, statsFor, recent }
+  return { attempts, loading, error, refresh, recordSession, removeAttempt, hasAttempt, forQuiz, statsFor, recent }
 }

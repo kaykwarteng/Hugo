@@ -27,8 +27,6 @@ interface SettingsDialogProps {
   /** One line describing the assistant's current state. */
   aiStatus: string
   onOpenAI: () => void
-  /** False when the browser is blocking localStorage. */
-  storageAvailable: boolean
   onClose: () => void
 }
 
@@ -58,7 +56,6 @@ export function SettingsDialog({
   soundSupported,
   aiStatus,
   onOpenAI,
-  storageAvailable,
   onClose,
 }: SettingsDialogProps) {
   const titleId = useId()
@@ -251,9 +248,7 @@ export function SettingsDialog({
         </section>
 
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          {storageAvailable
-            ? 'Quizzes, results and preferences are stored in this browser only. Clearing site data removes them.'
-            : 'This browser is blocking local storage, so quizzes and results cannot be saved.'}
+          Quizzes, results, and preferences are stored in the local database (SQLite).
         </p>
       </div>
     </Modal>

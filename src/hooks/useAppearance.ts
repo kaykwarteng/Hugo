@@ -3,25 +3,31 @@ import { defaultAppearance, loadAppearance, saveAppearance } from '../services/s
 import type { AppearancePrefs } from '../types/appearance'
 import { applyAppearance } from '../utils/appearance'
 
-/**
- * Font, text size and background preset.
- *
- * Shaped exactly like `useTheme`: state seeded from storage, one effect that
- * both applies the preference to <html> and persists it, memoized mutators.
- * The difference is that `main.tsx` also applies these once before the first
- * render — a wrong font *size* on screen for a frame is far more jarring than
- * a wrong colour, and `applyAppearance` is idempotent so the effect below just
- * writes the same values again.
- */
+/** Font, text size and background preset, persisted in SQLite via API. */
 export function useAppearance() {
-  const [appearance, setAppearance] = useState<AppearancePrefs>(loadAppearance)
+  const [appearance, setAppearance] = useState<AppearancePrefs>(defaultAppearance())
+
+  useEffect(() => {
+    let cancelled = false
+    void loadAppearance()
+      .then((saved) => {
+        if (!cancelled) setAppearance(saved)
+      })
+      .catch(() => {
+        /* keep defaults when DB unavailable */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     applyAppearance(document.documentElement, appearance)
-    saveAppearance(appearance)
+    void saveAppearance(appearance).catch(() => {
+      /* DB unavailable; UI still reflects chosen appearance */
+    })
   }, [appearance])
 
-  /** One patch callback rather than three setters — the controls are one group. */
   const updateAppearance = useCallback((patch: Partial<AppearancePrefs>) => {
     setAppearance((current) => ({ ...current, ...patch }))
   }, [])

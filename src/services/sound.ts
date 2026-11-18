@@ -4,8 +4,8 @@ import { MIN_GAIN, SOUND_SPECS, scheduleTones, shouldPlay } from '../utils/sound
 /**
  * The audio output shell.
  *
- * This is the **only** module allowed to construct an `AudioContext`, the same
- * way `services/storage.ts` is the only one allowed to touch localStorage.
+ * This is the **only** module allowed to construct an `AudioContext`. It owns
+ * browser audio output state, separate from DB-backed app persistence.
  * Everything else calls `playSound(name)` and gets on with it.
  *
  * Why a module singleton rather than a React context: audio output *is* a

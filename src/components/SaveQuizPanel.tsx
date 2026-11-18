@@ -3,20 +3,15 @@ import type { SavedQuiz } from '../types/quiz'
 
 interface SaveQuizPanelProps {
   questionCount: number
-  /** A library entry already holding these exact questions, if any. */
   duplicate: SavedQuiz | null
-  /** Set once this import has been saved, so the panel can confirm it. */
   savedName: string | null
-  onSave: (name: string) => void
-  onUpdate: (quizId: string) => void
-  /** False when localStorage is unavailable — saving wouldn't survive. */
-  storageAvailable: boolean
+  onSave: (name: string) => void | Promise<void>
+  onUpdate: (quizId: string) => void | Promise<void>
+  disabled?: boolean
 }
 
 /**
- * Offered alongside the setup screen after an import validates: name the quiz
- * and keep it in the local library. Re-importing something already saved
- * offers an update instead of quietly creating a duplicate.
+ * Save imported questions to the Quiz Library (SQLite via local API).
  */
 export function SaveQuizPanel({
   questionCount,
@@ -24,11 +19,23 @@ export function SaveQuizPanel({
   savedName,
   onSave,
   onUpdate,
-  storageAvailable,
+  disabled = false,
 }: SaveQuizPanelProps) {
   const inputId = useId()
   const [name, setName] = useState(duplicate?.name ?? '')
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const run = async (action: () => void | Promise<void>) => {
+    setBusy(true)
+    try {
+      await action()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save quiz')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const handleSave = () => {
     if (name.trim() === '') {
@@ -36,7 +43,7 @@ export function SaveQuizPanel({
       return
     }
     setError(null)
-    onSave(name)
+    void run(() => onSave(name))
   }
 
   if (savedName !== null) {
@@ -46,18 +53,6 @@ export function SaveQuizPanel({
         className="animate-fade-slide-in rounded-2xl border border-green-300 bg-green-50 p-4 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-400"
       >
         <strong>{savedName}</strong> is saved in your Quiz Library. Configure and start it below.
-      </div>
-    )
-  }
-
-  if (!storageAvailable) {
-    return (
-      <div
-        role="status"
-        className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-400"
-      >
-        Your browser is blocking local storage, so quizzes can't be saved to the library. You can
-        still take this quiz now.
       </div>
     )
   }
@@ -77,10 +72,11 @@ export function SaveQuizPanel({
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => onUpdate(duplicate.id)}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700"
+              disabled={busy || disabled}
+              onClick={() => void run(() => onUpdate(duplicate.id))}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-50"
             >
-              Update “{duplicate.name}”
+              {busy ? 'Saving…' : `Update “${duplicate.name}”`}
             </button>
           </div>
           <p className="mt-2 text-xs">
@@ -116,9 +112,10 @@ export function SaveQuizPanel({
         <button
           type="button"
           onClick={handleSave}
-          className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 font-medium shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
+          disabled={busy || disabled}
+          className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 font-medium shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
         >
-          {duplicate !== null ? 'Save as new copy' : 'Save quiz'}
+          {busy ? 'Saving…' : duplicate !== null ? 'Save as new copy' : 'Save quiz'}
         </button>
       </div>
 

@@ -5,29 +5,37 @@ import { buildSession } from '../utils/library'
 import { isMultiAnswer, toggleOption } from '../utils/quiz'
 
 interface StartOptions {
-  /** Set when the run comes from a saved quiz, so the attempt can be filed. */
   quizId?: string
   quizName?: string
 }
 
-/**
- * Central quiz state machine.
- *
- * Owns the active session (questions, answers, position, timer) and keeps it
- * mirrored to localStorage so a page refresh restores the quiz exactly where
- * the user left off.
- */
 export function useQuiz() {
-  // Lazy initializer: restore a previous session on first render.
-  const [session, setSession] = useState<QuizSession | null>(() => loadSession())
+  const [session, setSession] = useState<QuizSession | null>(null)
+  const [hydrated, setHydrated] = useState(false)
 
-  // Persist every change; remove the entry when the session is discarded.
   useEffect(() => {
-    if (session) saveSession(session)
-    else clearSession()
-  }, [session])
+    let cancelled = false
+    void loadSession()
+      .then((restored) => {
+        if (!cancelled) setSession(restored)
+      })
+      .catch(() => {
+        /* DB unavailable; start without restored session */
+      })
+      .finally(() => {
+        if (!cancelled) setHydrated(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
-  /** Build a fresh session from a question bank + user settings. */
+  useEffect(() => {
+    if (!hydrated) return
+    if (session) void saveSession(session).catch(() => {})
+    else void clearSession().catch(() => {})
+  }, [session, hydrated])
+
   const startQuiz = useCallback(
     (bank: QuizQuestion[], settings: QuizSettings, options: StartOptions = {}) => {
       setSession(buildSession(bank, settings, options))
@@ -35,15 +43,10 @@ export function useQuiz() {
     [],
   )
 
-  /** Pick up a previously stored run (a saved quiz's progress snapshot). */
   const resumeSession = useCallback((restored: QuizSession) => {
     setSession(restored)
   }, [])
 
-  /**
-   * Answer a single-answer question. Freely changeable until the quiz ends —
-   * or until the answer is revealed, which freezes it.
-   */
   const selectAnswer = useCallback((questionId: number, option: string) => {
     setSession((s) => {
       if (!s || s.status !== 'active' || s.revealed.includes(questionId)) return s
@@ -51,11 +54,6 @@ export function useQuiz() {
     })
   }, [])
 
-  /**
-   * Tick or untick an option on a multi-answer question. Refuses once the
-   * question has been checked — the hard lock lives here so no caller can
-   * route around it.
-   */
   const toggleDraft = useCallback((questionId: number, option: string) => {
     setSession((s) => {
       if (!s || s.status !== 'active' || s.answers[questionId] !== undefined) return s
@@ -67,15 +65,6 @@ export function useQuiz() {
     })
   }, [])
 
-  /**
-   * Reveal the correct answer for a question and lock it in.
-   *
-   * The one entry point for "Check answer" on both kinds of question: a
-   * multi-answer draft is committed to `answers` first (so what gets judged is
-   * the complete selection), then the id joins `revealed`. No-op when there is
-   * nothing selected yet or the question was already checked, so the reveal can
-   * never rewrite an answer or happen twice.
-   */
   const checkAnswer = useCallback((questionId: number) => {
     setSession((s) => {
       if (!s || s.status !== 'active' || s.revealed.includes(questionId)) return s
@@ -83,8 +72,6 @@ export function useQuiz() {
       if (question === undefined) return s
 
       const revealed = [...s.revealed, questionId]
-      // Already answered (a single pick, or a multi-answer question committed
-      // by an older build): nothing to move, just reveal.
       if (s.answers[questionId] !== undefined) return { ...s, revealed }
       if (!isMultiAnswer(question)) return s
 
@@ -126,10 +113,6 @@ export function useQuiz() {
     )
   }, [])
 
-  /**
-   * Restart the same questions with cleared answers and a fresh timer. A new
-   * attempt id makes this a separate entry in the results history.
-   */
   const retryQuiz = useCallback(() => {
     setSession((s) =>
       s
@@ -148,13 +131,13 @@ export function useQuiz() {
     )
   }, [])
 
-  /** Abandon the session entirely and return to the setup screen. */
   const resetQuiz = useCallback(() => {
     setSession(null)
   }, [])
 
   return {
     session,
+    hydrated,
     startQuiz,
     resumeSession,
     selectAnswer,

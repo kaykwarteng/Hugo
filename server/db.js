@@ -1,10 +1,10 @@
 /**
  * SQLite persistence for Hugo.
- * Database file: <project>/data/drillmcq.sqlite
+ * Database file: <project>/data/hugo.sqlite
  *
  * Schema mirrors the in-app model:
  *   Course → Chapter → Question
- * plus attempts and mastery.
+ *   Standalone quizzes, attempts, mastery, active sessions
  */
 
 import Database from 'better-sqlite3'
@@ -14,10 +14,35 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = path.resolve(__dirname, '../data')
-const DB_PATH = path.join(DATA_DIR, 'drillmcq.sqlite')
+const OLD_DB_PATH = path.join(DATA_DIR, 'drillmcq.sqlite')
+const DB_PATH = path.join(DATA_DIR, 'hugo.sqlite')
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true })
+}
+
+function removeSqliteFiles(basePath) {
+  for (const file of [basePath, `${basePath}-shm`, `${basePath}-wal`]) {
+    try {
+      if (fs.existsSync(file)) fs.unlinkSync(file)
+    } catch {
+      // ignore cleanup errors
+    }
+  }
+}
+
+// Migrate legacy drillmcq.sqlite -> hugo.sqlite (one-time), then remove old files.
+if (!fs.existsSync(DB_PATH) && fs.existsSync(OLD_DB_PATH)) {
+  const old = new Database(OLD_DB_PATH, { readonly: true, fileMustExist: true })
+  try {
+    old.exec(`VACUUM INTO '${DB_PATH.replace(/'/g, "''")}'`)
+  } finally {
+    old.close()
+  }
+  removeSqliteFiles(OLD_DB_PATH)
+} else if (fs.existsSync(DB_PATH) && fs.existsSync(OLD_DB_PATH)) {
+  // Already migrated; ensure old database files are removed as requested.
+  removeSqliteFiles(OLD_DB_PATH)
 }
 
 const db = new Database(DB_PATH)
@@ -90,8 +115,27 @@ db.exec(`
     updated_at       INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS saved_quizzes (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    fingerprint     TEXT,
+    questions_json  TEXT NOT NULL,
+    created_at      INTEGER NOT NULL,
+    updated_at      INTEGER NOT NULL,
+    last_attempt_id TEXT,
+    progress_json   TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS app_state (
+    key        TEXT PRIMARY KEY,
+    value_json TEXT,
+    updated_at INTEGER NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_chapters_course ON chapters(course_id);
   CREATE INDEX IF NOT EXISTS idx_questions_chapter ON questions(chapter_id);
+  CREATE INDEX IF NOT EXISTS idx_attempts_quiz_id ON attempts(quiz_id);
+  CREATE INDEX IF NOT EXISTS idx_saved_quizzes_updated ON saved_quizzes(updated_at DESC);
 `)
 
 // ---------------------------------------------------------------------------
@@ -115,6 +159,20 @@ function rowToQuestion(row) {
     explanation: row.explanation || undefined,
     category: row.category || undefined,
     difficulty: row.difficulty || undefined,
+  }
+}
+
+function rowToSavedQuiz(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    name: row.name,
+    fingerprint: row.fingerprint || undefined,
+    questions: parseJson(row.questions_json, []),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastAttemptId: row.last_attempt_id || undefined,
+    progress: parseJson(row.progress_json, undefined),
   }
 }
 
@@ -142,6 +200,68 @@ function loadChapters(courseId) {
 
 export function getDbPath() {
   return DB_PATH
+}
+
+// ---------------------------------------------------------------------------
+// Standalone saved quizzes
+// ---------------------------------------------------------------------------
+
+export function listSavedQuizzes() {
+  const rows = db
+    .prepare(`SELECT * FROM saved_quizzes ORDER BY updated_at DESC`)
+    .all()
+  return rows.map(rowToSavedQuiz)
+}
+
+export function getSavedQuiz(id) {
+  const row = db.prepare(`SELECT * FROM saved_quizzes WHERE id = ?`).get(id)
+  return rowToSavedQuiz(row)
+}
+
+export function upsertSavedQuiz(quiz) {
+  db.prepare(
+    `INSERT INTO saved_quizzes
+       (id, name, fingerprint, questions_json, created_at, updated_at, last_attempt_id, progress_json)
+     VALUES
+       (@id, @name, @fingerprint, @questionsJson, @createdAt, @updatedAt, @lastAttemptId, @progressJson)
+     ON CONFLICT(id) DO UPDATE SET
+       name = excluded.name,
+       fingerprint = excluded.fingerprint,
+       questions_json = excluded.questions_json,
+       created_at = excluded.created_at,
+       updated_at = excluded.updated_at,
+       last_attempt_id = excluded.last_attempt_id,
+       progress_json = excluded.progress_json`,
+  ).run({
+    id: quiz.id,
+    name: quiz.name,
+    fingerprint: quiz.fingerprint ?? null,
+    questionsJson: JSON.stringify(quiz.questions ?? []),
+    createdAt: quiz.createdAt ?? Date.now(),
+    updatedAt: quiz.updatedAt ?? Date.now(),
+    lastAttemptId: quiz.lastAttemptId ?? null,
+    progressJson: quiz.progress ? JSON.stringify(quiz.progress) : null,
+  })
+  return getSavedQuiz(quiz.id)
+}
+
+export function deleteSavedQuiz(id) {
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM saved_quizzes WHERE id = ?`).run(id)
+    db.prepare(`DELETE FROM attempts WHERE quiz_id = ?`).run(id)
+    db.prepare(`DELETE FROM mastery WHERE scope_key LIKE ?`).run(`${id}:%`)
+    db.prepare(`DELETE FROM active_sessions WHERE id = ?`).run(id)
+  })
+  tx()
+  return listSavedQuizzes()
+}
+
+export function bulkUpsertSavedQuizzes(quizzes) {
+  const tx = db.transaction(() => {
+    for (const quiz of quizzes || []) upsertSavedQuiz(quiz)
+  })
+  tx()
+  return listSavedQuizzes()
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +443,15 @@ export function appendAttempt(attempt) {
 }
 
 export function deleteAttempt(id) {
-  db.prepare(`DELETE FROM attempts WHERE id = ?`).run(id)
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM attempts WHERE id = ?`).run(id)
+    db.prepare(
+      `UPDATE saved_quizzes
+       SET last_attempt_id = NULL, updated_at = @updatedAt
+       WHERE last_attempt_id = @id`,
+    ).run({ id, updatedAt: Date.now() })
+  })
+  tx()
   return listAttempts()
 }
 
@@ -483,6 +611,38 @@ export function upsertActiveSession(payload) {
 export function deleteActiveSession(id) {
   db.prepare(`DELETE FROM active_sessions WHERE id = ?`).run(id)
   return listActiveSessions()
+}
+
+// ---------------------------------------------------------------------------
+// App state / settings (DB-backed, no browser storage)
+// ---------------------------------------------------------------------------
+
+export function getAppState(key) {
+  const row = db.prepare(`SELECT value_json FROM app_state WHERE key = ?`).get(key)
+  if (!row) return undefined
+  return parseJson(row.value_json, undefined)
+}
+
+export function setAppState(key, value) {
+  if (value === undefined) {
+    db.prepare(`DELETE FROM app_state WHERE key = ?`).run(key)
+    return undefined
+  }
+  db.prepare(
+    `INSERT INTO app_state (key, value_json, updated_at)
+     VALUES (@key, @valueJson, @updatedAt)
+     ON CONFLICT(key) DO UPDATE SET
+       value_json = excluded.value_json,
+       updated_at = excluded.updated_at`,
+  ).run({ key, valueJson: JSON.stringify(value), updatedAt: Date.now() })
+  return value
+}
+
+export function getAllAppState() {
+  const rows = db.prepare(`SELECT key, value_json FROM app_state`).all()
+  const out = {}
+  for (const row of rows) out[row.key] = parseJson(row.value_json, undefined)
+  return out
 }
 
 export default db

@@ -8,7 +8,31 @@ import type {
   SavedQuiz,
   SavedQuizProgress,
 } from '../types/quiz'
-import { createId, fingerprintQuestions } from '../services/storage'
+/** Collision-resistant enough for keys that never leave this browser/server context. */
+export function createId(prefix: string): string {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return `${prefix}_${crypto.randomUUID()}`
+    }
+  } catch {
+    // fall through to the Math.random path
+  }
+  return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+}
+
+/**
+ * Content hash of a question bank, used to recognise a re-import of a quiz
+ * that is already saved. Order-sensitive on purpose.
+ */
+export function fingerprintQuestions(questions: QuizQuestion[]): string {
+  const source = questions.map((q) => `${q.id}|${q.question}|${q.options.join('~')}`).join('\n')
+  let hash = 0x811c9dc5
+  for (let i = 0; i < source.length; i++) {
+    hash ^= source.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return `${questions.length}-${(hash >>> 0).toString(36)}`
+}
 import { computeResult, shuffle } from './quiz'
 
 /**

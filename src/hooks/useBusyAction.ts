@@ -3,8 +3,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 /**
  * Run synchronous work with a busy flag the browser actually gets to paint.
  *
- * Building a quiz — filtering by category, shuffling, writing the session to
- * localStorage, then rendering a screen full of questions — is fast but not
+ * Building a quiz — filtering by category, shuffling, persisting the session,
+ * then rendering a screen full of questions — is fast but not
  * free, and on a large bank it blocks the main thread long enough to feel like
  * a stall. Flipping a `useState` flag immediately before the work does nothing
  * visible, because React batches that update into the same frame the work

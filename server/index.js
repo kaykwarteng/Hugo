@@ -1,6 +1,6 @@
 /**
  * Local API server for Hugo.
- * Serves REST endpoints backed by SQLite (data/drillmcq.sqlite).
+ * Serves REST endpoints backed by SQLite (data/hugo.sqlite).
  *
  * Start:  npm run server
  * Dev UI proxies /api → this process (see vite.config.ts).
@@ -10,20 +10,28 @@ import cors from 'cors'
 import express from 'express'
 import {
   appendAttempt,
+  bulkUpsertSavedQuizzes,
   deleteActiveSession,
   deleteAttempt,
   deleteCourse,
+  deleteSavedQuiz,
   getActiveSession,
+  getAllAppState,
+  getAppState,
   getCourse,
   getDbPath,
+  getSavedQuiz,
   listActiveSessions,
   listAttempts,
   listCourses,
+  listSavedQuizzes,
   loadMastery,
   recordMasteryOutcome,
   saveMasteryMap,
+  setAppState,
   upsertActiveSession,
   upsertCourse,
+  upsertSavedQuiz,
 } from './db.js'
 
 const PORT = Number(process.env.PORT) || 8787
@@ -87,6 +95,69 @@ app.delete('/api/courses/:id', (req, res) => {
   res.json(deleteCourse(req.params.id))
 })
 
+// ---- Standalone saved quizzes ----
+
+app.get('/api/quizzes', (_req, res) => {
+  res.json(listSavedQuizzes())
+})
+
+app.post('/api/quizzes/bulk', (req, res) => {
+  const quizzes = Array.isArray(req.body) ? req.body : req.body?.quizzes
+  if (!Array.isArray(quizzes)) {
+    return res.status(400).json({ error: 'quizzes array required' })
+  }
+  res.json(bulkUpsertSavedQuizzes(quizzes))
+})
+
+app.get('/api/quizzes/:id', (req, res) => {
+  const quiz = getSavedQuiz(req.params.id)
+  if (!quiz) return res.status(404).json({ error: 'Quiz not found' })
+  res.json(quiz)
+})
+
+app.put('/api/quizzes/:id', (req, res) => {
+  const body = req.body
+  if (!body || body.id !== req.params.id) {
+    return res.status(400).json({ error: 'Body must include matching id' })
+  }
+  if (!body.name || typeof body.name !== 'string') {
+    return res.status(400).json({ error: 'name is required' })
+  }
+  const saved = upsertSavedQuiz({
+    id: body.id,
+    name: body.name,
+    fingerprint: body.fingerprint,
+    questions: Array.isArray(body.questions) ? body.questions : [],
+    createdAt: body.createdAt ?? Date.now(),
+    updatedAt: body.updatedAt ?? Date.now(),
+    lastAttemptId: body.lastAttemptId,
+    progress: body.progress,
+  })
+  res.json(saved)
+})
+
+app.post('/api/quizzes', (req, res) => {
+  const body = req.body
+  if (!body?.id || !body?.name) {
+    return res.status(400).json({ error: 'id and name are required' })
+  }
+  const saved = upsertSavedQuiz({
+    id: body.id,
+    name: body.name,
+    fingerprint: body.fingerprint,
+    questions: Array.isArray(body.questions) ? body.questions : [],
+    createdAt: body.createdAt ?? Date.now(),
+    updatedAt: body.updatedAt ?? Date.now(),
+    lastAttemptId: body.lastAttemptId,
+    progress: body.progress,
+  })
+  res.status(201).json(saved)
+})
+
+app.delete('/api/quizzes/:id', (req, res) => {
+  res.json(deleteSavedQuiz(req.params.id))
+})
+
 // ---- Attempts ----
 
 app.get('/api/attempts', (_req, res) => {
@@ -98,6 +169,18 @@ app.post('/api/attempts', (req, res) => {
     return res.status(400).json({ error: 'Invalid attempt' })
   }
   res.status(201).json(appendAttempt(req.body))
+})
+
+app.post('/api/attempts/bulk', (req, res) => {
+  const attempts = Array.isArray(req.body) ? req.body : req.body?.attempts
+  if (!Array.isArray(attempts)) {
+    return res.status(400).json({ error: 'attempts array required' })
+  }
+  let latest = listAttempts()
+  for (const attempt of attempts) {
+    if (attempt?.id && attempt?.quizName) latest = appendAttempt(attempt)
+  }
+  res.json(latest)
 })
 
 app.delete('/api/attempts/:id', (req, res) => {
@@ -153,6 +236,30 @@ app.put('/api/sessions/:id', (req, res) => {
 
 app.delete('/api/sessions/:id', (req, res) => {
   res.json(deleteActiveSession(req.params.id))
+})
+
+// ---- App state / settings ----
+
+app.get('/api/state', (_req, res) => {
+  res.json(getAllAppState())
+})
+
+app.get('/api/state/:key', (req, res) => {
+  const value = getAppState(req.params.key)
+  if (value === undefined) return res.status(404).json({ error: 'Not found' })
+  res.json({ key: req.params.key, value })
+})
+
+app.put('/api/state/:key', (req, res) => {
+  const body = req.body || {}
+  const value = Object.prototype.hasOwnProperty.call(body, 'value') ? body.value : body
+  setAppState(req.params.key, value)
+  res.json({ key: req.params.key, value })
+})
+
+app.delete('/api/state/:key', (req, res) => {
+  setAppState(req.params.key, undefined)
+  res.status(204).end()
 })
 
 app.use((err, _req, res, _next) => {

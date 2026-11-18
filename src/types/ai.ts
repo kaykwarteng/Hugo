@@ -39,7 +39,7 @@ export interface AIConfig {
   model: string
   /** True when the user typed a model id instead of picking from the catalog. */
   customModel: boolean
-  /** Opt-in: persist the API key to localStorage on this device. */
+  /** Opt-in: persist the API key in the local database on this device. */
   rememberKey: boolean
   /** Ceiling on questions sent in one "Verify all" run. */
   maxBatchQuestions: number

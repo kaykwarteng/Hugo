@@ -3,7 +3,7 @@ import { sendAIRequest, testAIConnection } from '../services/ai/aiService'
 import { defaultModelFor } from '../services/ai/models'
 import type { AIError, AIRequest } from '../services/ai/types'
 import {
-  clearAIKey,
+  clearAIKey as clearStoredAIKey,
   defaultAIConfig,
   loadAIConfig,
   loadAIKey,
@@ -113,16 +113,37 @@ export type UseAI = ReturnType<typeof useAI>
 
 export function useAI() {
   const [config, setConfig] = useState<AIConfig>(() => {
-    const stored = loadAIConfig()
-    // Storage stays ignorant of the model catalog, so fill the default here.
-    return stored.model === ''
-      ? { ...stored, model: defaultModelFor(stored.provider) }
-      : stored
+    const stored = defaultAIConfig()
+    return { ...stored, model: defaultModelFor(stored.provider) }
   })
 
-  // The key lives in memory unless the user opted into persisting it.
-  const [apiKey, setApiKeyState] = useState<string>(() => loadAIKey() ?? '')
-  const [keyPersisted, setKeyPersisted] = useState<boolean>(() => loadAIKey() !== null)
+  // The key lives in memory unless the user opted into persisting it in DB.
+  const [apiKey, setApiKeyState] = useState<string>('')
+  const [keyPersisted, setKeyPersisted] = useState<boolean>(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const [storedConfig, storedKey] = await Promise.all([loadAIConfig(), loadAIKey()])
+        if (cancelled) return
+        setConfig(
+          storedConfig.model === ''
+            ? { ...storedConfig, model: defaultModelFor(storedConfig.provider) }
+            : storedConfig,
+        )
+        if (storedKey) {
+          setApiKeyState(storedKey)
+          setKeyPersisted(true)
+        }
+      } catch {
+        /* DB unavailable; keep defaults */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const [active, setActive] = useState<UseAIRequestState | null>(null)
   const [error, setError] = useState<AIError | null>(null)
@@ -166,7 +187,7 @@ export function useAI() {
   const persist = useCallback((next: AIConfig) => {
     setConfig(next)
     configRef.current = next
-    saveAIConfig(next)
+    void saveAIConfig(next).catch(() => {})
     setConnectionStatus('idle')
   }, [])
 
@@ -210,10 +231,10 @@ export function useAI() {
     setConnectionStatus('idle')
     if (configRef.current.rememberKey) {
       if (key.trim() === '') {
-        clearAIKey()
+        void clearStoredAIKey().catch(() => {})
         setKeyPersisted(false)
       } else {
-        saveAIKey(key)
+        void saveAIKey(key).catch(() => {})
         setKeyPersisted(true)
       }
     }
@@ -223,11 +244,11 @@ export function useAI() {
     (remember: boolean) => {
       persist({ ...configRef.current, rememberKey: remember })
       if (remember && keyRef.current.trim() !== '') {
-        saveAIKey(keyRef.current)
+        void saveAIKey(keyRef.current).catch(() => {})
         setKeyPersisted(true)
       } else {
         // Unticking removes the stored copy immediately, not on next save.
-        clearAIKey()
+        void clearStoredAIKey().catch(() => {})
         setKeyPersisted(false)
       }
     },
@@ -237,7 +258,7 @@ export function useAI() {
   const forgetKey = useCallback(() => {
     setApiKeyState('')
     keyRef.current = ''
-    clearAIKey()
+    void clearStoredAIKey().catch(() => {})
     setKeyPersisted(false)
     setConnectionStatus('idle')
     setError(null)

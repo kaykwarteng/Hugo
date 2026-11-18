@@ -1,14 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { QuizAttempt, QuizQuestion, QuizSettings, SavedQuiz } from '../types/quiz'
-import { installMemoryStorage } from '../test/localStorageMock'
-import {
-  appendAttempt,
-  loadAttempts,
-  loadSavedQuizzes,
-  patchSavedQuiz,
-  resetMigrationForTests,
-  upsertSavedQuiz,
-} from '../services/storage'
 import {
   attemptStatus,
   attemptToQuestionBank,
@@ -61,10 +52,6 @@ function attemptWith(percentage: number, completedAt: number, id: string): QuizA
   }
 }
 
-beforeEach(() => {
-  installMemoryStorage()
-  resetMigrationForTests()
-})
 
 describe('starting a saved quiz', () => {
   it('links the session to the saved quiz', () => {
@@ -115,9 +102,7 @@ describe('resuming an unfinished quiz', () => {
     }
 
     const progress = sessionToProgress(inProgress)
-    upsertSavedQuiz({ ...quiz, progress })
-
-    const stored = loadSavedQuizzes()[0]
+    const stored = { ...quiz, progress }
     expect(stored.progress).toBeDefined()
     expect(attemptStatus(stored, 0)).toBe('in-progress')
 
@@ -173,21 +158,20 @@ describe('completing an attempt', () => {
 
   it('stores retakes side by side instead of overwriting', () => {
     const quiz = createSavedQuiz('Geography', questions)
-    upsertSavedQuiz(quiz)
-
     const runs: Record<number, string[]>[] = [{ 1: ['Paris'] }, { 1: ['Paris'], 2: ['4'] }]
+    const attempts: QuizAttempt[] = []
+    let current = quiz
     for (const answers of runs) {
       const finished = { ...buildSession(questions, settings, { quizId: quiz.id, quizName: quiz.name }), answers }
       const attempt = sessionToAttempt(finished)
-      appendAttempt(attempt)
-      patchSavedQuiz(quiz.id, (q) => ({ ...q, progress: undefined, lastAttemptId: attempt.id }))
+      attempts.push(attempt)
+      current = { ...current, progress: undefined, lastAttemptId: attempt.id }
     }
 
-    const stored = loadAttempts()
-    expect(stored).toHaveLength(2)
-    expect(stored.map((a) => a.percentage)).toEqual([33, 67])
-    expect(loadSavedQuizzes()[0].progress).toBeUndefined()
-    expect(attemptStatus(loadSavedQuizzes()[0], stored.length)).toBe('completed')
+    expect(attempts).toHaveLength(2)
+    expect(attempts.map((a) => a.percentage)).toEqual([33, 67])
+    expect(current.progress).toBeUndefined()
+    expect(attemptStatus(current, attempts.length)).toBe('completed')
   })
 
   it('reproduces the review screen from a stored attempt', () => {
