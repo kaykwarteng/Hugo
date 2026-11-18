@@ -67,7 +67,7 @@
 - **Quiz library**: save imported quizzes to your **Quiz Library**, with question count, categories, best score, attempts, and status (not started / in progress / completed). Rename, start over, view results, or delete from a per-card menu
 - **Resume**: leave or refresh mid-quiz and pick up from home or the library exactly where you left off, with answers, position, timer, and settings intact
 - **Results history**: every completed attempt is kept locally, on its own **Results** screen and per quiz, with latest / best / average scores and a full review of any past attempt
-- **Session persistence**: progress, answers, and timer survive a page refresh (localStorage)
+- **Session persistence**: progress, answers, and timer survive a page refresh (SQLite database)
 - **Timer mode**: optional countdown that auto-submits when time runs out
 - **Shuffle**: optionally shuffle questions and/or options
 - **Category filtering**: pick which categories to include before starting
@@ -167,7 +167,7 @@ A full run through the app, in the order you meet it.
 - [Vite](https://vite.dev/) for dev server and builds
 - [Tailwind CSS v4](https://tailwindcss.com/) for styling
 - [Vitest](https://vitest.dev/) for unit tests
-- `localStorage` for persistence: **no backend, no database**
+- `SQLite database` for persistence: **no backend, no database**
 
 ## Getting Started
 
@@ -436,7 +436,7 @@ selected set is exactly the correct set. For correct answers `A, C`:
 
 ## Data & Storage
 
-Everything is stored in your browser's `localStorage` under versioned keys:
+Everything is stored in your browser's `SQLite database` under versioned keys:
 
 | Key                            | Contents                             |
 | ------------------------------ | ------------------------------------ |
@@ -457,7 +457,7 @@ saved quizzes, an unfinished run, and your results history survive the upgrade.
 
 Nothing is ever sent to a server. Clearing site data clears your quizzes and
 history. Corrupted records are repaired or dropped on load rather than crashing
-the app, and if `localStorage` is full or blocked the app still runs, it just
+the app, and if `SQLite database` is full or blocked the app still runs, it just
 stops persisting.
 
 ## AI assistant (optional)
@@ -581,7 +581,7 @@ src/
  │    ├── useBusyAction.ts     # Busy state for a one-shot async action
  │    └── useAI.ts             # AI config, key, and request lifecycle
  ├── services/
- │    ├── storage.ts           # localStorage wrapper + migration
+ │    ├── storage.ts           # SQLite database wrapper + migration
  │    └── ai/                  # Provider-agnostic AI transport
  │         ├── aiService.ts    # Facade: send, normalize, redact keys
  │         ├── models.ts       # Curated model catalog per provider
@@ -641,8 +641,8 @@ These are the constraints the project is built on, and what a review will check.
 [`CLAUDE.md`](CLAUDE.md) is the long-form architecture guide — read it first.
 
 - **No backend, no database.** Everything is client-side; persistence is
-  `localStorage` and only ever through `src/services/storage.ts`. Never touch
-  `localStorage` anywhere else.
+  `SQLite database` and only ever through `src/services/storage.ts`. Never touch
+  `SQLite database` anywhere else.
 - **No new runtime dependencies** without discussing it first. The app ships
   `react` + `react-dom` and nothing more.
 - **No binary assets.** There is no `public/` folder; sounds are synthesized
@@ -749,5 +749,5 @@ npm run dev
 
 Health check: `http://localhost:8787/api/health` returns `{ ok: true, db: "<path>" }`.
 
-Theme, sound, and AI prefs still use browser `localStorage`. Question banks and courses use SQLite.
+Theme, sound, and AI prefs still use browser `SQLite database`. Question banks and courses use SQLite.
 
