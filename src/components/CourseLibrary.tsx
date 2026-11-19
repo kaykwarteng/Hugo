@@ -7,6 +7,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { CourseQuizConfig } from './CourseQuizConfig'
 import {
   IconChart,
+  IconChevronDown,
   IconChevronRight,
   IconEdit,
   IconFileQuestion,
@@ -43,7 +44,7 @@ interface CourseLibraryProps {
   onStartQuiz: (
     questions: QuizQuestion[],
     settings: QuizSettings,
-    meta?: { courseId: string; courseName: string; chapterIds: string[]; chapterTitles: string[] },
+    meta?: { courseId: string; courseName: string; chapterIds: string[]; chapterTitles: string[]; allChaptersSelected?: boolean },
   ) => void
   onImportToChapter: (courseId: string, chapterId: string) => void
   activeSessions?: ActiveSessionRecord[]
@@ -67,7 +68,7 @@ type SubView =
   | { kind: 'chapter'; courseId: string; chapterId: string }
 
 type CourseSort = 'recent' | 'alpha' | 'questions' | 'chapters'
-type ChapterSort = 'order' | 'alpha' | 'questions'
+type ChapterSort = 'order' | 'number' | 'alpha' | 'questions'
 
 interface CardMenuItem {
   label: string
@@ -84,6 +85,7 @@ const COURSE_SORT_OPTIONS: { value: CourseSort; label: string }[] = [
 ]
 
 const CHAPTER_SORT_OPTIONS: { value: ChapterSort; label: string }[] = [
+  { value: 'number', label: 'Numeric order' },
   { value: 'order', label: 'Course order' },
   { value: 'alpha', label: 'Name (A–Z)' },
   { value: 'questions', label: 'Most questions' },
@@ -156,7 +158,7 @@ export function CourseLibrary({
   const [courseSearch, setCourseSearch] = useState('')
   const [courseSort, setCourseSort] = useState<CourseSort>('recent')
   const [chapterSearch, setChapterSearch] = useState('')
-  const [chapterSort, setChapterSort] = useState<ChapterSort>('order')
+  const [chapterSort, setChapterSort] = useState<ChapterSort>('number')
 
   const findCourse = (id: string) => courses.find((course) => course.id === id) ?? null
   const findChapter = (courseId: string, chapterId: string) =>
@@ -220,9 +222,16 @@ export function CourseLibrary({
 
   const sortedChapters = useMemo(() => {
     if (!viewCourse) return []
+    const chapterNumber = (title: string) => {
+      const m = /chapter\s*(\d+(?:\.\d+)?)/i.exec(title) ?? /(\d+(?:\.\d+)?)/.exec(title)
+      return m ? parseFloat(m[1]) : Number.POSITIVE_INFINITY
+    }
     const query = chapterSearch.trim().toLowerCase()
     const filtered = query
-      ? viewCourse.chapters.filter((chapter) => chapter.title.toLowerCase().includes(query))
+      ? viewCourse.chapters.filter((chapter) => {
+          const hay = `${chapter.title} ${chapter.description ?? ''}`.toLowerCase()
+          return hay.includes(query)
+        })
       : viewCourse.chapters
     const list = [...filtered]
     switch (chapterSort) {
@@ -233,6 +242,14 @@ export function CourseLibrary({
         list.sort(
           (a, b) => b.questions.length - a.questions.length || a.title.localeCompare(b.title),
         )
+        break
+      case 'number':
+        list.sort((a, b) => {
+          const na = chapterNumber(a.title)
+          const nb = chapterNumber(b.title)
+          if (na !== nb) return na - nb
+          return a.order - b.order || a.title.localeCompare(b.title)
+        })
         break
       default:
         list.sort((a, b) => a.order - b.order)
@@ -1182,18 +1199,88 @@ function LibraryToolbar({
           className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
         />
       </div>
-      <select
-        value={sort}
-        onChange={(event) => onSortChange(event.target.value)}
-        aria-label={sortLabel}
-        className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+      <SortSelect value={sort} onChange={onSortChange} options={sortOptions} label={sortLabel} />
+    </div>
+  )
+}
+
+function SortSelect({
+  value,
+  onChange,
+  options,
+  label,
+}: {
+  value: string
+  onChange: (value: string) => void
+  options: { value: string; label: string }[]
+  label: string
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const current = options.find((o) => o.value === value) ?? options[0]
+
+  useEffect(() => {
+    if (!open) return
+    const onPointer = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative sm:min-w-[12rem]">
+      <button
+        type="button"
+        aria-label={label}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex w-full items-center justify-between gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
       >
-        {sortOptions.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        <span className="truncate">{current?.label ?? 'Sort'}</span>
+        <IconChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          aria-label={label}
+          className="absolute right-0 top-full z-30 mt-1 w-full min-w-[12rem] overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+        >
+          {options.map((option) => {
+            const selected = option.value === value
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  onChange(option.value)
+                  setOpen(false)
+                }}
+                className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                  selected
+                    ? 'bg-indigo-50 font-medium text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300'
+                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+                }`}
+              >
+                <span>{option.label}</span>
+                {selected && <span className="text-xs text-indigo-600 dark:text-indigo-400">✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

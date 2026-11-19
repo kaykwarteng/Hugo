@@ -8,7 +8,11 @@ interface CourseQuizConfigProps {
   /** Pre-selected chapter ids (e.g. single chapter study). */
   initialChapterIds?: string[]
   onBack: () => void
-  onStart: (questions: import('../types/quiz').QuizQuestion[], settings: QuizSettings, meta: { courseId: string; courseName: string; chapterIds: string[]; chapterTitles: string[] }) => void
+  onStart: (
+    questions: import('../types/quiz').QuizQuestion[],
+    settings: QuizSettings,
+    meta: { courseId: string; courseName: string; chapterIds: string[]; chapterTitles: string[]; allChaptersSelected: boolean },
+  ) => void
 }
 
 /**
@@ -77,11 +81,14 @@ export function CourseQuizConfig({
       passPercentage: Math.min(100, Math.max(0, Number(passPercentage) || 60)),
       questionCount: effectiveCount < availableCount ? effectiveCount : undefined,
     }
+    const allChaptersSelected =
+      selectableChapters.length > 0 && selectedChapters.length === selectableChapters.length
     onStart([...availableQuestions], settings, {
       courseId: course.id,
       courseName: course.name,
       chapterIds: selectedChapters.map((ch) => ch.id),
       chapterTitles: selectedChapters.map((ch) => ch.title),
+      allChaptersSelected,
     })
   }
 

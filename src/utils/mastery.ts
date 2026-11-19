@@ -127,3 +127,54 @@ export function selectQuestionsByMastery(
 export function flattenCourseQuestions(course: Pick<Course, 'chapters'>): QuizQuestion[] {
   return course.chapters.flatMap((ch) => toCourseScopedQuestions(ch.id, ch.questions))
 }
+export interface MasteryGroup {
+  id: string
+  label: string
+  questions: QuizQuestion[]
+  summary: MasterySummary
+}
+
+export function getCategoryGroups(
+  questions: QuizQuestion[],
+  scopeId: string,
+  map: Record<string, QuestionMastery>,
+): MasteryGroup[] {
+  const groups = new Map<string, QuizQuestion[]>()
+  for (const q of questions) {
+    const label = (q.category || '').trim() || 'Uncategorized'
+    const arr = groups.get(label) ?? []
+    arr.push(q)
+    groups.set(label, arr)
+  }
+  return [...groups.entries()]
+    .map(([label, qs]) => ({
+      id: `cat:${label}`,
+      label,
+      questions: qs,
+      summary: getMasterySummary(qs, scopeId, map),
+    }))
+    .sort(
+      (a, b) =>
+        b.summary.due + b.summary.weak - (a.summary.due + a.summary.weak) ||
+        b.summary.total - a.summary.total ||
+        a.label.localeCompare(b.label),
+    )
+}
+
+export function getChapterGroups(
+  course: Pick<Course, 'id' | 'chapters'>,
+  map: Record<string, QuestionMastery>,
+): MasteryGroup[] {
+  const scopeId = `course:${course.id}`
+  return [...course.chapters]
+    .sort((a, b) => a.order - b.order)
+    .map((ch) => {
+      const qs = toCourseScopedQuestions(ch.id, ch.questions)
+      return {
+        id: ch.id,
+        label: ch.title,
+        questions: qs,
+        summary: getMasterySummary(qs, scopeId, map),
+      }
+    })
+}

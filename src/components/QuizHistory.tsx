@@ -50,7 +50,7 @@ export function QuizHistory({
   return (
     <section className="animate-fade-slide-in space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0 flex-1">
           <button
             type="button"
             onClick={onBack}
@@ -58,13 +58,13 @@ export function QuizHistory({
           >
             ← Back to {backLabel}
           </button>
-          <h2 className="mt-1 text-xl font-bold tracking-tight">{quiz.name}</h2>
+          <h2 className="mt-1 break-words text-xl font-bold tracking-tight">{quiz.name}</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">Results</p>
         </div>
         <button
           type="button"
           onClick={onRetake}
-          className="min-h-11 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+          className="min-h-11 shrink-0 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
         >
           Start again
         </button>
@@ -98,21 +98,21 @@ export function QuizHistory({
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="font-semibold">
                     <span className="text-indigo-600 dark:text-indigo-400">{attempt.percentage}%</span>{' '}
                     <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
                       {attempt.correct}/{attempt.total} correct
                     </span>
                   </p>
-                  <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+                  <p className="mt-0.5 break-words text-sm text-slate-500 dark:text-slate-400">
                     {formatDateTime(attempt.completedAt)} · took {formatTime(attempt.timeTakenSeconds)}
                   </p>
-                  <p className="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+                  <p className="mt-0.5 break-words text-xs text-slate-400 dark:text-slate-500">
                     {describeSettings(attempt.settings)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   <button
                     type="button"
                     onClick={() => onReview(attempt)}

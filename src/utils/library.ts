@@ -165,6 +165,27 @@ export function attemptToSession(attempt: QuizAttempt): QuizSession {
   }
 }
 
+/** Split a quiz/run label like "Course · Chapter 1, Chapter 2" into balanced display parts. */
+export function splitQuizLabel(name: string): { primary: string; secondary?: string } {
+  const sep = ' · '
+  const i = name.indexOf(sep)
+  if (i === -1) return { primary: name.trim() || 'Quiz' }
+  const primary = name.slice(0, i).trim() || 'Quiz'
+  const rest = name.slice(i + sep.length).trim()
+  if (!rest) return { primary }
+
+  if (/^all chapters$/i.test(rest) || /^\d+\s+chapters$/i.test(rest)) {
+    return { primary, secondary: rest }
+  }
+
+  const parts = rest.split(/\s*,\s*/).filter(Boolean)
+  if (parts.length >= 3 && /chapter/i.test(rest)) {
+    return { primary, secondary: `${parts.length} chapters` }
+  }
+
+  return { primary, secondary: rest }
+}
+
 /** Newest first. Does not mutate the input. */
 export function sortAttemptsByRecency(attempts: QuizAttempt[]): QuizAttempt[] {
   return [...attempts].sort((a, b) => b.completedAt - a.completedAt)

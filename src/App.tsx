@@ -477,7 +477,7 @@ export default function App() {
                   : 'Back to Results'
             }
             onHome={() => navigate('home')}
-            subtitle={`${reviewAttempt.quizName} · ${formatDateTime(reviewAttempt.completedAt)}`}
+            subtitle={formatDateTime(reviewAttempt.completedAt)}
             renderQuestionExtras={renderQuestionExtras}
           />
         )}
@@ -662,11 +662,16 @@ export default function App() {
                     chapterIds: meta.chapterIds ?? [],
                   }
                 }
+                const chapterLabel = (() => {
+                  if (!meta?.chapterTitles?.length) return ''
+                  if (meta.allChaptersSelected) return ' · All chapters'
+                  if (meta.chapterTitles.length === 1) return ` · ${meta.chapterTitles[0]}`
+                  if (meta.chapterTitles.length <= 2) return ` · ${meta.chapterTitles.join(', ')}`
+                  return ` · ${meta.chapterTitles.length} chapters`
+                })()
                 quiz.startQuiz(questions, settings, {
                   quizId,
-                  quizName: meta
-                    ? `${meta.courseName}${meta.chapterTitles.length ? ' · ' + meta.chapterTitles.join(', ') : ''}`
-                    : undefined,
+                  quizName: meta ? `${meta.courseName}${chapterLabel}` : undefined,
                 })
                 refreshCourseSessions()
               }}

@@ -41,10 +41,10 @@ export function ConfirmDialog({
       onClose={onCancel}
       initialFocusRef={cancelRef}
     >
-      <h2 id={titleId} className="text-lg font-semibold">
+      <h2 id={titleId} className="break-words text-lg font-semibold">
         {title}
       </h2>
-      <div id={descriptionId} className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      <div id={descriptionId} className="mt-2 break-words text-sm text-slate-600 dark:text-slate-400">
         {message}
       </div>
 

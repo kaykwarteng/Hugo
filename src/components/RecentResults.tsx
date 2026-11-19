@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { SaveAttemptResult } from '../hooks/useSavedQuizzes'
 import { playSound } from '../services/sound'
 import type { QuizAttempt } from '../types/quiz'
-import { formatDateTime, formatRelativeDay } from '../utils/library'
+import { formatDateTime, formatRelativeDay, splitQuizLabel } from '../utils/library'
 import { ConfirmDialog } from './ConfirmDialog'
 import type { MenuAction } from './OverflowMenu'
 import { OverflowMenu } from './OverflowMenu'
@@ -128,7 +128,7 @@ export function RecentResults({
       {feedback !== null && (
         <p
           role="status"
-          className="animate-fade-slide-in rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-400"
+          className="animate-fade-slide-in break-words rounded-2xl border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-400"
         >
           {feedback.status === 'saved' ? (
             <>
@@ -147,17 +147,24 @@ export function RecentResults({
         emptyState
       ) : (
         <ul className="divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
-          {attempts.map((attempt) => (
-            <li key={attempt.id} className="flex items-center gap-2 pr-3">
+          {attempts.map((attempt) => {
+            const { primary, secondary } = splitQuizLabel(attempt.quizName)
+            return (
+            <li key={attempt.id} className="group flex items-center pr-2 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/70">
               <button
                 type="button"
                 onClick={() => onReview(attempt)}
                 aria-label={`Review ${attempt.quizName} attempt from ${formatDateTime(attempt.completedAt)}`}
-                className="flex min-h-16 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-indigo-500 dark:hover:bg-slate-800"
+                className="flex min-h-16 min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-indigo-500"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold">{attempt.quizName}</span>
-                  <span className="block text-xs text-slate-500 dark:text-slate-400">
+                  <span className="block break-words text-sm font-semibold leading-snug">{primary}</span>
+                  {secondary && (
+                    <span className="mt-0.5 inline-flex max-w-full rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                      <span className="truncate">{secondary}</span>
+                    </span>
+                  )}
+                  <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
                     {attempt.correct}/{attempt.total} correct · {formatRelativeDay(attempt.completedAt)}
                   </span>
                 </span>
@@ -165,12 +172,15 @@ export function RecentResults({
                   {attempt.percentage}%
                 </span>
               </button>
-              <OverflowMenu
-                label={`More actions for the ${attempt.quizName} attempt from ${formatDateTime(attempt.completedAt)}`}
-                actions={buildActions(attempt)}
-              />
+              <div className="shrink-0">
+                <OverflowMenu
+                  label={`More actions for the ${attempt.quizName} attempt from ${formatDateTime(attempt.completedAt)}`}
+                  actions={buildActions(attempt)}
+                />
+              </div>
             </li>
-          ))}
+            )
+          })}
         </ul>
       )}
 

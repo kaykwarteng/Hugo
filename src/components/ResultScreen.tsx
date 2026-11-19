@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { playSound } from '../services/sound'
 import type { QuizQuestion, QuizSession } from '../types/quiz'
+import { splitQuizLabel } from '../utils/library'
 import { computeResult, isAnswerCorrect, isMultiAnswer } from '../utils/quiz'
 import { CelebrationOverlay } from './CelebrationOverlay'
 import { MathText } from './MathText'
@@ -28,8 +29,8 @@ interface ResultScreenProps {
   /** Straight to the Quiz Library. Omitted in review mode, which has its own back. */
   onLibrary?: () => void
   onHome?: () => void
-  /** Optional context line, e.g. the quiz name and attempt date. */
-  subtitle?: string
+  /** Optional context/meta line, e.g. attempt date. */
+  subtitle?: React.ReactNode
   /**
    * Extra content rendered at the bottom of each review block. Used for the
    * optional AI explanation panel, which is injected rather than imported so
@@ -131,6 +132,8 @@ export function ResultScreen({
   const secondary =
     'min-h-11 rounded-xl border border-slate-300 bg-white px-5 py-2.5 font-medium shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800'
 
+  const quizLabel = session.quizName ? splitQuizLabel(session.quizName) : null
+
   return (
     <div className="animate-fade-slide-in space-y-6">
       {/* Score summary card. Its border carries the verdict's colour too, so
@@ -145,8 +148,24 @@ export function ResultScreen({
         <h2 className="text-xl font-bold tracking-tight">
           {onRetry === undefined ? 'Attempt review' : 'Quiz complete'}
         </h2>
-        {subtitle !== undefined && (
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
+        {(quizLabel || subtitle !== undefined) && (
+          <div className="mt-2 flex flex-col items-center gap-1.5">
+            {quizLabel && (
+              <>
+                <p className="max-w-2xl break-words text-sm font-medium text-slate-800 dark:text-slate-100 sm:text-base">
+                  {quizLabel.primary}
+                </p>
+                {quizLabel.secondary && (
+                  <span className="inline-flex max-w-full rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <span className="truncate">{quizLabel.secondary}</span>
+                  </span>
+                )}
+              </>
+            )}
+            {subtitle !== undefined && (
+              <p className="break-words text-sm text-slate-500 dark:text-slate-400">{subtitle}</p>
+            )}
+          </div>
         )}
         {/* Verdict block: ring, PASS/FAIL, threshold. Stacks on a phone and
             sits side by side from `sm` up, where there's room for both. */}
@@ -311,7 +330,7 @@ export function ResultScreen({
             >
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium leading-snug">
+                  <p className="break-words font-medium leading-snug">
                     <MathText>{q.question}</MathText>
                   </p>
                   {q.imageUrl && <img src={q.imageUrl} alt="" className="mt-3 max-h-64 rounded-lg border border-slate-200 object-contain dark:border-slate-800" loading="lazy" />}
@@ -354,7 +373,7 @@ export function ResultScreen({
                             : 'border-slate-200 dark:border-slate-800'
                       }`}
                     >
-                      <span><MathText>{option}</MathText></span>
+                      <span className="min-w-0 flex-1 break-words"><MathText>{option}</MathText></span>
                       {isAnswer && isChosen && (
                         <span className="text-xs font-medium text-green-700 dark:text-green-400">
                           ✓ Correct

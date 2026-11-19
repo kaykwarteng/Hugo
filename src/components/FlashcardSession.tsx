@@ -55,7 +55,7 @@ export function FlashcardSession({ questions, scopeId, title, onExit, onProgress
         <main className="mx-auto max-w-2xl px-4 py-10">
           <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h1 className="text-2xl font-bold">Session complete</h1>
-            <p className="mt-1 text-slate-600 dark:text-slate-400">{title}</p>
+            <p className="mt-1 break-words text-slate-600 dark:text-slate-400">{title}</p>
             <div className="mt-6 grid grid-cols-3 gap-3 text-center">
               <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30"><div className="text-2xl font-bold text-red-700 dark:text-red-400">{counts.again}</div><div className="text-sm font-medium text-red-700/80 dark:text-red-400/80">Again</div></div>
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30"><div className="text-2xl font-bold text-amber-700 dark:text-amber-400">{counts.hard}</div><div className="text-sm font-medium text-amber-700/80 dark:text-amber-400/80">Hard</div></div>
