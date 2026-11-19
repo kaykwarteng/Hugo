@@ -7,7 +7,6 @@ import {
   selectQuestionsByMastery,
   flattenCourseQuestions,
   type MasteryGroup,
-  type MasterySummary,
 } from '../utils/mastery'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Modal } from './Modal'
@@ -33,6 +32,23 @@ interface MasteryDashboardProps {
 }
 
 type Mode = 'due' | 'weak' | 'adaptive' | 'flagged' | 'bookmarked'
+
+const TONES = {
+  strong: 'border-green-200 bg-green-50 text-green-700 dark:border-green-900/60 dark:bg-green-950/40 dark:text-green-400',
+  learning: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-400',
+  due: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-400',
+  weak: 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-400',
+  new: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-300',
+} as const
+
+function StatBox({ label, value, tone }: { label: string; value: number; tone: keyof typeof TONES }) {
+  return (
+    <div className={`flex min-w-0 flex-col items-center justify-center rounded-lg border px-1 py-2 text-center ${TONES[tone]}`}>
+      <span className="text-base font-semibold leading-none sm:text-lg">{value}</span>
+      <span className="mt-1 truncate text-[10px] font-medium uppercase tracking-wide sm:text-[11px]">{label}</span>
+    </div>
+  )
+}
 
 function ScopeCard({
   title,
@@ -95,7 +111,6 @@ function ScopeCard({
     due.length > 0 ? 'due' : adaptive.length > 0 ? 'adaptive' : weak.length > 0 ? 'weak' : null
 
   const extraModes: { mode: Mode; label: string; count: number }[] = []
-  if (primaryMode !== 'weak' && weak.length > 0) extraModes.push({ mode: 'weak', label: 'Weak', count: weak.length })
   if (flagged.length > 0) extraModes.push({ mode: 'flagged', label: 'Flagged', count: flagged.length })
   if (bookmarked.length > 0) extraModes.push({ mode: 'bookmarked', label: 'Bookmarked', count: bookmarked.length })
 
@@ -151,41 +166,38 @@ function ScopeCard({
         </div>
 
         {questions.length > 0 && (
-          <div className="mt-2">
-            <DistributionBar summary={summary} />
-            <p className="mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs">
-              <span className="font-medium text-green-700 dark:text-green-400">Strong {summary.strong}</span>
-              <span className="font-medium text-blue-700 dark:text-blue-400">Learning {summary.learning}</span>
-              <span className="font-medium text-amber-700 dark:text-amber-400">Due {summary.due}</span>
-              <span className="font-medium text-red-700 dark:text-red-400">Weak {summary.weak}</span>
-              <span className="text-slate-500 dark:text-slate-400">New {summary.fresh}</span>
-            </p>
+          <div className="mt-3 grid grid-cols-5 gap-1.5">
+            <StatBox label="Strong" value={summary.strong} tone="strong" />
+            <StatBox label="Learning" value={summary.learning} tone="learning" />
+            <StatBox label="Due" value={summary.due} tone="due" />
+            <StatBox label="Weak" value={summary.weak} tone="weak" />
+            <StatBox label="New" value={summary.fresh} tone="new" />
           </div>
         )}
 
         <div className="mt-3 flex flex-1 flex-col gap-2">
-          {(primaryMode || (onStartFlashcards && flashcards.length > 0)) && (
-            <div className="flex flex-wrap gap-2">
-              {primaryMode && (
-                <button
-                  type="button"
-                  onClick={() => start(primaryMode)}
-                  className="inline-flex min-h-9 items-center justify-center rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
-                >
-                  {primaryLabel}
-                </button>
-              )}
-              {onStartFlashcards && flashcards.length > 0 && (
-                <button
-                  type="button"
-                  onClick={startFlashcards}
-                  className="inline-flex min-h-9 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-950/70"
-                >
-                  Flashcards
-                </button>
-              )}
-            </div>
-          )}
+        {(primaryMode || (onStartFlashcards && flashcards.length > 0)) && (
+          <div className="flex gap-2">
+            {primaryMode && (
+              <button
+                type="button"
+                onClick={() => start(primaryMode)}
+                className="inline-flex min-h-9 min-w-0 flex-1 items-center justify-center rounded-lg bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500"
+              >
+                {primaryLabel}
+              </button>
+            )}
+            {onStartFlashcards && flashcards.length > 0 && (
+              <button
+                type="button"
+                onClick={startFlashcards}
+                className="inline-flex min-h-9 min-w-0 flex-1 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 dark:hover:bg-indigo-950/70"
+              >
+                Flashcards
+              </button>
+            )}
+          </div>
+        )}
 
           {extraModes.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -218,15 +230,12 @@ function ScopeCard({
             {summary.tracked}/{summary.total} tracked
           </p>
           {questions.length > 0 && (
-            <div className="mt-3">
-              <DistributionBar summary={summary} />
-              <p className="mt-2 flex flex-wrap gap-x-2 gap-y-0.5 text-sm">
-                <span className="font-medium text-green-700 dark:text-green-400">Strong {summary.strong}</span>
-                <span className="font-medium text-blue-700 dark:text-blue-400">Learning {summary.learning}</span>
-                <span className="font-medium text-amber-700 dark:text-amber-400">Due {summary.due}</span>
-                <span className="font-medium text-red-700 dark:text-red-400">Weak {summary.weak}</span>
-                <span className="text-slate-500 dark:text-slate-400">New {summary.fresh}</span>
-              </p>
+            <div className="mt-3 grid grid-cols-5 gap-2">
+              <StatBox label="Strong" value={summary.strong} tone="strong" />
+              <StatBox label="Learning" value={summary.learning} tone="learning" />
+              <StatBox label="Due" value={summary.due} tone="due" />
+              <StatBox label="Weak" value={summary.weak} tone="weak" />
+              <StatBox label="New" value={summary.fresh} tone="new" />
             </div>
           )}
           <div className="mt-4 space-y-4">
@@ -254,34 +263,6 @@ function ScopeCard({
         </Modal>
       )}
     </>
-  )
-}
-
-function DistributionBar({ summary }: { summary: MasterySummary }) {
-  const parts: { key: string; value: number; className: string; label: string }[] = [
-    { key: 'strong', value: summary.strong, className: 'bg-green-500 dark:bg-green-600', label: 'Strong' },
-    { key: 'learning', value: summary.learning, className: 'bg-blue-500 dark:bg-blue-600', label: 'Learning' },
-    { key: 'due', value: summary.due, className: 'bg-amber-400 dark:bg-amber-500', label: 'Due' },
-    { key: 'weak', value: summary.weak, className: 'bg-red-500 dark:bg-red-600', label: 'Weak' },
-    { key: 'new', value: summary.fresh, className: 'bg-slate-200 dark:bg-slate-700', label: 'New' },
-  ]
-  const total = summary.total || 1
-  return (
-    <div
-      className="flex h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
-      aria-label={`Strong ${summary.strong}, learning ${summary.learning}, due ${summary.due}, weak ${summary.weak}, new ${summary.fresh}`}
-    >
-      {parts.map((p) =>
-        p.value > 0 ? (
-          <div
-            key={p.key}
-            className={`${p.className} h-full`}
-            style={{ width: `${(p.value / total) * 100}%` }}
-            title={`${p.label}: ${p.value}`}
-          />
-        ) : null,
-      )}
-    </div>
   )
 }
 
