@@ -1,4 +1,4 @@
-import type { QuizQuestion, QuizResult, QuizSession } from '../types/quiz'
+import type { QuizOption, QuizOptionObject, QuizQuestion, QuizResult, QuizSession } from '../types/quiz'
 
 /** Fisher–Yates shuffle. Returns a new array; never mutates the input. */
 export function shuffle<T>(items: T[]): T[] {
@@ -10,6 +10,52 @@ export function shuffle<T>(items: T[]): T[] {
   return result
 }
 
+// --- option helpers ------------------------------------------------------
+
+/** Stable key for an option (used for selection, answers, and correctAnswers). */
+export function getOptionKey(option: QuizOption, index?: number): string {
+  if (typeof option === 'string') return option
+  const o = option as QuizOptionObject
+  const key = o.id ?? o.text ?? o.imageUrl ?? o.audioUrl
+  if (typeof key === 'string' && key !== '') return key
+  return index !== undefined ? `option-${index + 1}` : ''
+}
+
+/** Display text for an option (may be empty for media-only options). */
+export function getOptionText(option: QuizOption): string {
+  if (typeof option === 'string') return option
+  return typeof option.text === 'string' ? option.text : ''
+}
+
+export function getOptionMedia(option: QuizOption): { imageUrl?: string; audioUrl?: string } {
+  if (typeof option === 'string') return {}
+  return {
+    imageUrl: typeof option.imageUrl === 'string' && option.imageUrl ? option.imageUrl : undefined,
+    audioUrl: typeof option.audioUrl === 'string' && option.audioUrl ? option.audioUrl : undefined,
+  }
+}
+
+export function optionHasContent(option: QuizOption): boolean {
+  return getOptionText(option).trim() !== '' || !!getOptionMedia(option).imageUrl || !!getOptionMedia(option).audioUrl
+}
+
+function normalizeOption(raw: unknown): QuizOption | null {
+  if (typeof raw === 'string') return raw
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return null
+  const o = raw as Record<string, unknown>
+  const text = typeof o.text === 'string' ? o.text : ''
+  const imageUrl = typeof o.imageUrl === 'string' && o.imageUrl ? o.imageUrl : undefined
+  const audioUrl = typeof o.audioUrl === 'string' && o.audioUrl ? o.audioUrl : undefined
+  const id = typeof o.id === 'string' && o.id ? o.id : undefined
+  if (!text && !imageUrl && !audioUrl && !id) return null
+  const out: QuizOptionObject = {}
+  if (id) out.id = id
+  if (text) out.text = text
+  if (imageUrl) out.imageUrl = imageUrl
+  if (audioUrl) out.audioUrl = audioUrl
+  return out
+}
+
 // --- multi-answer helpers ------------------------------------------------
 
 /** True when the question expects more than one option to be ticked. */
@@ -18,7 +64,8 @@ export function isMultiAnswer(question: QuizQuestion): boolean {
 }
 
 /** A question as written by a build before multiple correct answers existed. */
-export interface LegacyQuizQuestion extends Omit<QuizQuestion, 'correctAnswers'> {
+export interface LegacyQuizQuestion extends Omit<QuizQuestion, 'correctAnswers' | 'options'> {
+  options?: unknown[]
   correctAnswers?: string[]
   correctAnswer?: string
 }
@@ -29,16 +76,29 @@ export interface LegacyQuizQuestion extends Omit<QuizQuestion, 'correctAnswers'>
  * used by the JSON importer and by every storage load path.
  */
 export function normalizeQuestion(raw: LegacyQuizQuestion): QuizQuestion {
-  const { correctAnswer, correctAnswers, ...rest } = raw
+  const { correctAnswer, correctAnswers, options, ...rest } = raw
   const r = rest as Record<string, unknown>
   const imageUrl = typeof r.imageUrl === 'string' && r.imageUrl ? r.imageUrl : undefined
   const audioUrl = typeof r.audioUrl === 'string' && r.audioUrl ? r.audioUrl : undefined
   const note = typeof r.note === 'string' && r.note ? r.note : undefined
+  const normalizedOptions = Array.isArray(options)
+    ? options.map(normalizeOption).filter((o): o is QuizOption => o !== null)
+    : []
+
+  const keys = normalizedOptions.map((o, idx) => getOptionKey(o, idx))
+  const resolve = (ans: string): string => {
+    if (keys.includes(ans)) return ans
+    const byText = normalizedOptions.findIndex((o) => getOptionText(o) === ans)
+    return byText >= 0 ? keys[byText] : ans
+  }
+  const rawCorrect = correctAnswers ?? (correctAnswer === undefined ? [] : [correctAnswer])
+  const resolvedCorrect = Array.isArray(rawCorrect) ? rawCorrect.map((a) => (typeof a === 'string' ? resolve(a) : a)) : []
+
   return {
     id: raw.id,
     question: raw.question,
-    options: raw.options,
-    correctAnswers: correctAnswers ?? (correctAnswer === undefined ? [] : [correctAnswer]),
+    options: normalizedOptions,
+    correctAnswers: resolvedCorrect as string[],
     explanation: raw.explanation,
     category: raw.category,
     difficulty: raw.difficulty,
@@ -69,17 +129,12 @@ export function isRevealed(session: QuizSession, questionId: number): boolean {
 
 /**
  * Is the question frozen against further changes?
- *
- * Two independent reasons, both permanent: the answer has been revealed (it is
- * on screen, so re-picking would be meaningless), or it is a multi-answer
- * question whose draft was already committed. The second clause is what keeps
- * sessions written before "Check answer" existed locked exactly as they were.
+ * Once revealed/checked, the answer is shown and the selection is locked.
+ * Selections are saved as you answer, so checking is optional for scoring.
  */
 export function isQuestionLocked(session: QuizSession, question: QuizQuestion): boolean {
-  return (
-    isRevealed(session, question.id) ||
-    (isMultiAnswer(question) && session.answers[question.id] !== undefined)
-  )
+  void question
+  return isRevealed(session, question.id)
 }
 
 /** Add or remove an option from a multi-select draft. Never mutates. */
@@ -132,16 +187,29 @@ export function parseQuizJson(
     if (typeof q.question !== 'string' || q.question.trim() === '') {
       return { ok: false, error: `${label}: "question" is required and must be a non-empty string.` }
     }
-    if (
-      !Array.isArray(q.options) ||
-      q.options.length < 2 ||
-      !q.options.every((o) => typeof o === 'string')
-    ) {
-      return { ok: false, error: `${label}: "options" must be an array of at least 2 strings.` }
+    if (!Array.isArray(q.options) || q.options.length < 2) {
+      return { ok: false, error: `${label}: "options" must be an array of at least 2 options.` }
     }
+
+    const normalizedOptions = q.options.map(normalizeOption)
+    if (normalizedOptions.some((o) => o === null)) {
+      return { ok: false, error: `${label}: each option must be a non-empty string or an object with text/imageUrl/audioUrl.` }
+    }
+    const opts = normalizedOptions as QuizOption[]
+    if (!opts.every(optionHasContent)) {
+      return { ok: false, error: `${label}: each option must include text, imageUrl, or audioUrl.` }
+    }
+    const keys = opts.map((o, idx) => getOptionKey(o, idx))
+    if (keys.some((k) => !k)) {
+      return { ok: false, error: `${label}: each option must have text, imageUrl, audioUrl, or id.` }
+    }
+    const dupKey = keys.find((k, idx) => keys.indexOf(k) !== idx)
+    if (dupKey !== undefined) {
+      return { ok: false, error: `${label}: options must be unique (duplicate option "${dupKey}").` }
+    }
+
     // "correctAnswers" is the current shape; a single "correctAnswer" string
     // is still accepted so quizzes exported by older builds keep loading.
-    const options = q.options
     if (q.correctAnswers !== undefined) {
       if (
         !Array.isArray(q.correctAnswers) ||
@@ -157,7 +225,7 @@ export function parseQuizJson(
       if (duplicate !== undefined) {
         return { ok: false, error: `${label}: "correctAnswers" lists "${duplicate}" twice.` }
       }
-      const unknown = q.correctAnswers.find((a) => !options.includes(a))
+      const unknown = q.correctAnswers.find((a) => !keys.includes(a))
       if (unknown !== undefined) {
         return {
           ok: false,
@@ -165,7 +233,7 @@ export function parseQuizJson(
         }
       }
     } else if (typeof q.correctAnswer === 'string') {
-      if (!options.includes(q.correctAnswer)) {
+      if (!keys.includes(q.correctAnswer)) {
         return {
           ok: false,
           error: `${label}: "correctAnswer" ("${q.correctAnswer}") must exactly match one of the options.`,
@@ -177,6 +245,7 @@ export function parseQuizJson(
         error: `${label}: "correctAnswers" is required — an array of the options that are correct (a single "correctAnswer" string also works).`,
       }
     }
+
     const qRec = q as Record<string, unknown>
     for (const [key, type] of [
       ['explanation', 'string'],

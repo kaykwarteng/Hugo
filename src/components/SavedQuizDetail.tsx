@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { QuizQuestion, SavedQuiz } from '../types/quiz'
-import { parseQuizJson } from '../utils/quiz'
+import { getOptionKey, getOptionMedia, getOptionText, parseQuizJson } from '../utils/quiz'
 import { ConfirmDialog } from './ConfirmDialog'
 import { MathText } from './MathText'
 import { Modal } from './Modal'
@@ -122,11 +122,19 @@ export function SavedQuizDetail({
               {q.audioUrl && <audio controls src={q.audioUrl} className="mb-3 w-full" />}
               <ul className="mb-2 space-y-1">
                 {q.options.map((opt, i) => {
-                  const isCorrect = q.correctAnswers.includes(opt)
+                  const key = getOptionKey(opt, i)
+                  const isCorrect = q.correctAnswers.includes(key)
+                  const text = getOptionText(opt)
+                  const { imageUrl, audioUrl } = getOptionMedia(opt)
                   return (
-                    <li key={i} className={`flex gap-2 rounded-md px-2 py-1 text-sm ${isCorrect ? 'bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-300' : 'text-slate-600 dark:text-slate-400'}`}>
+                    <li key={key} className={`flex gap-2 rounded-md px-2 py-1 text-sm ${isCorrect ? 'bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-300' : 'text-slate-600 dark:text-slate-400'}`}>
                       <span className="w-5 shrink-0 font-semibold">{String.fromCharCode(65 + i)}.</span>
-                      <span className="min-w-0"><MathText>{opt}</MathText>{isCorrect && <span className="ml-1 text-xs font-medium">(correct)</span>}</span>
+                      <span className="min-w-0 flex flex-col gap-1">
+                        {text ? <MathText>{text}</MathText> : <span>Option {i + 1}</span>}
+                        {imageUrl ? <img src={imageUrl} alt="" className="max-h-32 rounded border border-slate-200 object-contain dark:border-slate-700" loading="lazy" /> : null}
+                        {audioUrl ? <audio controls src={audioUrl} className="w-full" /> : null}
+                        {isCorrect && <span className="text-xs font-medium">(correct)</span>}
+                      </span>
                     </li>
                   )
                 })}

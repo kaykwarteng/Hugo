@@ -55,7 +55,7 @@ function sameAnswerSet(a: string[], b: string[]): boolean {
 }
 
 /**
- * Map model-supplied indexes onto real option strings. Out-of-range indexes
+ * Map model-supplied indexes onto real option keys. Out-of-range indexes
  * are fatal (the model was talking about options that don't exist); duplicates
  * are simply collapsed.
  */
@@ -80,7 +80,9 @@ function resolveIndexes(
     }
     if (seen.has(entry)) continue
     seen.add(entry)
-    options.push(question.options[entry])
+    const opt = question.options[entry]
+    const key = typeof opt === 'string' ? opt : (opt.id ?? opt.text ?? opt.imageUrl ?? opt.audioUrl ?? `option-${entry + 1}`)
+    options.push(key)
   }
   if (options.length === 0) {
     return { ok: false, error: 'The AI did not name any correct option.' }
@@ -117,8 +119,10 @@ export function validateExplanationResponse(
       if (typeof index !== 'number' || !Number.isInteger(index)) continue
       if (index < 0 || index >= question.options.length) continue
       if (typeof entry.note !== 'string' || entry.note.trim() === '') continue
+      const opt = question.options[index]
+      const key = typeof opt === 'string' ? opt : (opt.id ?? opt.text ?? opt.imageUrl ?? opt.audioUrl ?? `option-${index + 1}`)
       optionNotes.push({
-        option: question.options[index],
+        option: key,
         note: clamp(entry.note, MAX_NOTE_CHARS),
       })
     }

@@ -1,4 +1,5 @@
-import type { QuizQuestion } from '../../types/quiz'
+import type { QuizOption, QuizQuestion } from '../../types/quiz'
+import { getOptionKey, getOptionMedia, getOptionText } from '../quiz'
 
 /**
  * Bits shared by the three prompt builders. Pure — no React, no I/O.
@@ -24,16 +25,23 @@ export const AI_COMMON_SYSTEM =
   'When writing mathematical expressions or equations, always enclose them in LaTeX delimiters: ' +
   'use $...$ for inline math and $$...$$ for display math. Never leave equations, symbols, or formulas bare or undelimited.'
 
-/** `[0] Paris` / `[1] Rome`, one per line. */
-export function formatOptions(options: string[]): string {
-  return options.map((option, index) => `[${index}] ${option}`).join('\n')
+/** `[0] Paris` / `[1] (image)`, one per line. */
+export function formatOptions(options: QuizOption[]): string {
+  return options
+    .map((option, index) => {
+      const text = getOptionText(option).trim()
+      const media = getOptionMedia(option)
+      const label = text || (media.imageUrl && media.audioUrl ? '(image & audio)' : media.imageUrl ? '(image)' : media.audioUrl ? '(audio)' : '(option)')
+      return `[${index}] ${label}`
+    })
+    .join('\n')
 }
 
 /** Indexes of a question's correct answers, for stating the source key. */
 export function answerIndexes(question: QuizQuestion): number[] {
   const indexes: number[] = []
   question.correctAnswers.forEach((answer) => {
-    const index = question.options.indexOf(answer)
+    const index = question.options.findIndex((o, i) => getOptionKey(o, i) === answer)
     if (index !== -1) indexes.push(index)
   })
   return indexes

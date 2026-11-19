@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { playSound } from '../services/sound'
 import type { QuizQuestion, QuizSession } from '../types/quiz'
 import { splitQuizLabel } from '../utils/library'
-import { computeResult, isAnswerCorrect, isMultiAnswer } from '../utils/quiz'
+import { computeResult, getOptionKey, getOptionMedia, getOptionText, isAnswerCorrect, isMultiAnswer } from '../utils/quiz'
 import { CelebrationOverlay } from './CelebrationOverlay'
 import { MathText } from './MathText'
 import { ConfirmDialog } from './ConfirmDialog'
@@ -357,12 +357,15 @@ export function ResultScreen({
               )}
 
               <div className="space-y-2">
-                {q.options.map((option) => {
-                  const isAnswer = q.correctAnswers.includes(option)
-                  const isChosen = chosen.includes(option)
+                {q.options.map((option, idx) => {
+                  const key = getOptionKey(option, idx)
+                  const isAnswer = q.correctAnswers.includes(key)
+                  const isChosen = chosen.includes(key)
+                  const text = getOptionText(option)
+                  const { imageUrl, audioUrl } = getOptionMedia(option)
                   return (
                     <div
-                      key={option}
+                      key={key}
                       className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm ${
                         isAnswer
                           ? isChosen
@@ -373,19 +376,24 @@ export function ResultScreen({
                             : 'border-slate-200 dark:border-slate-800'
                       }`}
                     >
-                      <span className="min-w-0 flex-1 break-words"><MathText>{option}</MathText></span>
+                      <span className="flex min-w-0 flex-1 flex-col gap-1 break-words">
+                        {text ? <MathText as="span">{text}</MathText> : null}
+                        {imageUrl ? <img src={imageUrl} alt="" className="max-h-40 rounded border border-slate-200 object-contain dark:border-slate-700" loading="lazy" /> : null}
+                        {audioUrl ? <audio controls src={audioUrl} className="w-full" /> : null}
+                        {!text && !imageUrl && !audioUrl ? <span className="text-slate-500">Option {idx + 1}</span> : null}
+                      </span>
                       {isAnswer && isChosen && (
-                        <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                        <span className="shrink-0 text-xs font-medium text-green-700 dark:text-green-400">
                           ✓ Correct
                         </span>
                       )}
                       {isAnswer && !isChosen && (
-                        <span className="text-xs font-medium text-green-700 dark:text-green-400">
+                        <span className="shrink-0 text-xs font-medium text-green-700 dark:text-green-400">
                           Correct answer{answer === undefined ? '' : ' (missed)'}
                         </span>
                       )}
                       {isChosen && !isAnswer && (
-                        <span className="text-xs font-medium text-red-700 dark:text-red-400">
+                        <span className="shrink-0 text-xs font-medium text-red-700 dark:text-red-400">
                           ✗ Your answer
                         </span>
                       )}

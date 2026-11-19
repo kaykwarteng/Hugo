@@ -10,7 +10,7 @@ import {
   questionsWithIssues,
   summarizeVerifications,
 } from '../utils/ai/applyVerification'
-import { toggleOption } from '../utils/quiz'
+import { getOptionKey, getOptionText, toggleOption } from '../utils/quiz'
 import { AI_DISCLAIMER } from './aiDisclaimer'
 import { ConfirmDialog } from './ConfirmDialog'
 import { Spinner } from './Spinner'
@@ -232,17 +232,21 @@ export function AIVerificationPanel({ questions, ai, onApply }: AIVerificationPa
 
               {editing === question.id ? (
                 <div className="mt-3 space-y-2">
-                  {question.options.map((option) => (
-                    <label key={option} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={draft.includes(option)}
-                        onChange={() => setDraft((current) => toggleOption(current, option))}
-                        className="size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-700"
-                      />
-                      <span><MathText>{option}</MathText></span>
-                    </label>
-                  ))}
+                  {question.options.map((option, idx) => {
+                    const key = getOptionKey(option, idx)
+                    const text = getOptionText(option).trim() || `Option ${idx + 1}`
+                    return (
+                      <label key={key} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={draft.includes(key)}
+                          onChange={() => setDraft((current) => toggleOption(current, key))}
+                          className="size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 dark:border-slate-700"
+                        />
+                        <span><MathText>{text}</MathText></span>
+                      </label>
+                    )
+                  })}
                   <div className="flex flex-wrap gap-2 pt-1">
                     <button
                       type="button"

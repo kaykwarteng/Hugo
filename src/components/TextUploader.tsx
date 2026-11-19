@@ -6,7 +6,7 @@ import type { AIFormattingResult } from '../types/ai'
 import type { QuizQuestion } from '../types/quiz'
 import { AI_FORMATTING_MAX_CHARS } from '../utils/ai/buildAIFormattingPrompt'
 import { parseMcqText } from '../utils/parseMcqText'
-import { isMultiAnswer } from '../utils/quiz'
+import { getOptionKey, getOptionMedia, getOptionText, isMultiAnswer } from '../utils/quiz'
 import { Spinner } from './Spinner'
 import { IconSparkles, IconUndo2, IconXCircle, IconAlertTriangle } from './icons/Icons'
 
@@ -348,18 +348,22 @@ export function TextUploader({ onLoad, ai }: TextUploaderProps) {
                 )}
               </p>
               <ul className="space-y-0.5">
-                {q.options.map((option) => {
-                  const correct = q.correctAnswers.includes(option)
+                {q.options.map((option, idx) => {
+                  const key = getOptionKey(option, idx)
+                  const correct = q.correctAnswers.includes(key)
+                  const text = getOptionText(option).trim()
+                  const media = getOptionMedia(option)
+                  const label = text || (media.imageUrl ? '(image option)' : media.audioUrl ? '(audio option)' : `Option ${idx + 1}`)
                   return (
                     <li
-                      key={option}
+                      key={key}
                       className={
                         correct
                           ? 'font-medium text-green-700 dark:text-green-400'
                           : 'text-slate-600 dark:text-slate-400'
                       }
                     >
-                      {correct ? '✓' : '•'} {option}
+                      {correct ? '✓' : '•'} {label}
                     </li>
                   )
                 })}

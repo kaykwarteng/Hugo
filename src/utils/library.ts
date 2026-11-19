@@ -25,7 +25,18 @@ export function createId(prefix: string): string {
  * that is already saved. Order-sensitive on purpose.
  */
 export function fingerprintQuestions(questions: QuizQuestion[]): string {
-  const source = questions.map((q) => `${q.id}|${q.question}|${q.options.join('~')}`).join('\n')
+  const source = questions
+    .map((q) => {
+      const opts = q.options
+        .map((o, i) => {
+          if (typeof o === 'string') return o
+          const k = o.id ?? o.text ?? o.imageUrl ?? o.audioUrl ?? `option-${i + 1}`
+          return `${k}|${o.text ?? ''}|${o.imageUrl ?? ''}|${o.audioUrl ?? ''}`
+        })
+        .join('~')
+      return `${q.id}|${q.question}|${opts}`
+    })
+    .join('\n')
   let hash = 0x811c9dc5
   for (let i = 0; i < source.length; i++) {
     hash ^= source.charCodeAt(i)

@@ -3,6 +3,7 @@ import { apiRecordMastery } from '../services/api'
 import { masteryKey } from '../utils/mastery'
 import type { QuizQuestion } from '../types/quiz'
 import { MathText } from './MathText'
+import { getOptionKey, getOptionMedia, getOptionText } from '../utils/quiz'
 import { IconArrowLeft } from './icons/Icons'
 
 interface FlashcardSessionProps {
@@ -110,16 +111,31 @@ export function FlashcardSession({ questions, scopeId, title, onExit, onProgress
               <div className="rounded-xl border border-green-300 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950/40">
                 <p className="text-sm font-semibold text-green-800 dark:text-green-400">Correct answer{card.correctAnswers.length > 1 ? 's' : ''}</p>
                 <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-800 dark:text-slate-200">
-                  {card.correctAnswers.map((a) => <li key={a}><MathText as="span">{a}</MathText></li>)}
+                  {card.correctAnswers.map((a) => {
+                    const idx = card.options.findIndex((o, i) => getOptionKey(o, i) === a)
+                    const label = idx >= 0 ? (getOptionText(card.options[idx]).trim() || a) : a
+                    return <li key={a}><MathText as="span">{label}</MathText></li>
+                  })}
                 </ul>
               </div>
               {card.options?.length > 0 && (
                 <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-800">
                   <p className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300">All options</p>
                   <ul className="space-y-1 text-sm">
-                    {card.options.map((opt) => {
-                      const ok = card.correctAnswers.includes(opt)
-                      return <li key={opt} className={`rounded-lg px-3 py-2 ${ok ? 'bg-green-50 font-medium text-green-800 dark:bg-green-950/30 dark:text-green-300' : 'bg-slate-50 text-slate-600 dark:bg-slate-800/60 dark:text-slate-400'}`}>{ok ? '✓ ' : ''}<MathText as="span">{opt}</MathText></li>
+                    {card.options.map((opt, idx) => {
+                      const key = getOptionKey(opt, idx)
+                      const ok = card.correctAnswers.includes(key)
+                      const text = getOptionText(opt)
+                      const { imageUrl, audioUrl } = getOptionMedia(opt)
+                      return (
+                        <li key={key} className={`rounded-lg px-3 py-2 ${ok ? 'bg-green-50 font-medium text-green-800 dark:bg-green-950/30 dark:text-green-300' : 'bg-slate-50 text-slate-600 dark:bg-slate-800/60 dark:text-slate-400'}`}>
+                          <div className="flex flex-col gap-1">
+                            <span>{ok ? '✓ ' : ''}{text ? <MathText as="span">{text}</MathText> : `Option ${idx + 1}`}</span>
+                            {imageUrl ? <img src={imageUrl} alt="" className="max-h-40 rounded border border-slate-200 object-contain dark:border-slate-700" loading="lazy" /> : null}
+                            {audioUrl ? <audio controls src={audioUrl} className="w-full" /> : null}
+                          </div>
+                        </li>
+                      )
                     })}
                   </ul>
                 </div>

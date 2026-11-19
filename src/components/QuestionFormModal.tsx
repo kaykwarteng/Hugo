@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import type { QuizQuestion } from '../types/quiz'
+import { useMemo, useState } from 'react'
+import type { QuizOption, QuizQuestion } from '../types/quiz'
+import { getOptionKey, getOptionMedia, getOptionText } from '../utils/quiz'
 import { MathText } from './MathText'
 import { Modal } from './Modal'
 import { IconPlus, IconTrash, IconX } from './icons/Icons'
@@ -13,19 +14,46 @@ interface QuestionFormModalProps {
   nextId?: number
 }
 
+interface OptRow {
+  key: string
+  text: string
+  imageUrl: string
+  audioUrl: string
+  explicitId?: string
+}
+
+function uid() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return `opt_${crypto.randomUUID()}`
+  } catch { /* ignore */ }
+  return `opt_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+}
+
+function rowsFromQuestion(q: QuizQuestion | null): { rows: OptRow[]; correct: Set<string> } {
+  if (!q) {
+    const rows = [0, 1, 2, 3].map(() => ({ key: uid(), text: '', imageUrl: '', audioUrl: '' }))
+    return { rows, correct: new Set() }
+  }
+  const rows = q.options.map((opt, i) => {
+    const key = getOptionKey(opt, i) || uid()
+    const text = getOptionText(opt)
+    const media = getOptionMedia(opt)
+    const explicitId = typeof opt === 'string' ? undefined : opt.id
+    return { key, text, imageUrl: media.imageUrl ?? '', audioUrl: media.audioUrl ?? '', explicitId }
+  })
+  return { rows: rows.length ? rows : [{ key: uid(), text: '', imageUrl: '', audioUrl: '' }], correct: new Set(q.correctAnswers) }
+}
+
 /**
  * Shared Add / Edit question modal for chapter question management.
- * Supports multi-correct answers, LaTeX preview, and option CRUD.
+ * Supports multi-correct answers, LaTeX preview, and text/image/audio options.
  */
 export function QuestionFormModal({ initial, onSave, onCancel, nextId = 1 }: QuestionFormModalProps) {
   const isEdit = initial !== null
+  const init = useMemo(() => rowsFromQuestion(initial), [initial])
   const [statement, setStatement] = useState(initial?.question ?? '')
-  const [options, setOptions] = useState<string[]>(
-    initial?.options?.length ? [...initial.options] : ['', '', '', ''],
-  )
-  const [correct, setCorrect] = useState<Set<string>>(
-    new Set(initial?.correctAnswers ?? []),
-  )
+  const [rows, setRows] = useState<OptRow[]>(init.rows)
+  const [correct, setCorrect] = useState<Set<string>>(init.correct)
   const [explanation, setExplanation] = useState(initial?.explanation ?? '')
   const [difficulty, setDifficulty] = useState(initial?.difficulty ?? '')
   const [category, setCategory] = useState(initial?.category ?? '')
@@ -37,81 +65,84 @@ export function QuestionFormModal({ initial, onSave, onCancel, nextId = 1 }: Que
   const [error, setError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
 
-  useEffect(() => {
-    // Keep correct set in sync when option text changes (match by index when possible)
-  }, [options])
-
-  const updateOption = (index: number, value: string) => {
-    setOptions((prev) => {
-      const next = [...prev]
-      const old = next[index]
-      next[index] = value
-      // Migrate correct flag if the text changed
-      if (old && correct.has(old) && value !== old) {
-        setCorrect((c) => {
-          const s = new Set(c)
-          s.delete(old)
-          if (value.trim()) s.add(value)
-          return s
-        })
-      }
-      return next
-    })
+  const updateRow = (index: number, patch: Partial<OptRow>) => {
+    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)))
   }
 
-  const toggleCorrect = (option: string) => {
-    if (!option.trim()) return
+  const toggleCorrect = (key: string) => {
     setCorrect((prev) => {
       const next = new Set(prev)
-      if (next.has(option)) next.delete(option)
-      else next.add(option)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
       return next
     })
   }
 
   const addOption = () => {
-    if (options.length >= 8) return
-    setOptions((prev) => [...prev, ''])
+    if (rows.length >= 8) return
+    setRows((prev) => [...prev, { key: uid(), text: '', imageUrl: '', audioUrl: '' }])
   }
 
   const removeOption = (index: number) => {
-    if (options.length <= 2) return
-    const removed = options[index]
-    setOptions((prev) => prev.filter((_, i) => i !== index))
+    if (rows.length <= 2) return
+    const removed = rows[index]
+    setRows((prev) => prev.filter((_, i) => i !== index))
     if (removed) {
       setCorrect((c) => {
         const s = new Set(c)
-        s.delete(removed)
+        s.delete(removed.key)
         return s
       })
     }
   }
 
   const handleSave = () => {
-    const trimmedOptions = options.map((o) => o.trim()).filter(Boolean)
+    setError(null)
     if (!statement.trim()) {
       setError('Question statement is required.')
       return
     }
-    if (trimmedOptions.length < 2) {
-      setError('Provide at least two answer options.')
+
+    const built: { option: QuizOption; key: string; rowKey: string }[] = []
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i]
+      const text = r.text.trim()
+      const img = r.imageUrl.trim()
+      const aud = r.audioUrl.trim()
+      if (!text && !img && !aud) continue
+      const hasMedia = !!img || !!aud
+      if (hasMedia || r.explicitId) {
+        const option: { id: string; text?: string; imageUrl?: string; audioUrl?: string } = { id: r.key }
+        if (text) option.text = text
+        if (img) option.imageUrl = img
+        if (aud) option.audioUrl = aud
+        built.push({ option, key: r.key, rowKey: r.key })
+      } else {
+        built.push({ option: text, key: text, rowKey: r.key })
+      }
+    }
+
+    if (built.length < 2) {
+      setError('Provide at least two answer options (text, image URL, or audio URL).')
       return
     }
-    // Rebuild correct from current option texts that were marked
-    const marked = trimmedOptions.filter((o) => {
-      // find original index
-      const idx = options.findIndex((x) => x.trim() === o)
-      const original = idx >= 0 ? options[idx] : o
-      return correct.has(original) || correct.has(o)
-    })
+    const keys = built.map((b) => b.key)
+    const dup = keys.find((k, idx) => keys.indexOf(k) !== idx)
+    if (dup !== undefined) {
+      setError('Each option must be unique. Two options resolve to the same answer key.')
+      return
+    }
+
+    const marked = built.filter((b) => correct.has(b.rowKey)).map((b) => b.key)
     if (marked.length === 0) {
       setError('Mark at least one correct answer.')
       return
     }
+
     const question: QuizQuestion = {
       id: initial?.id ?? nextId,
       question: statement.trim(),
-      options: trimmedOptions,
+      options: built.map((b) => b.option),
       correctAnswers: marked,
       explanation: explanation.trim() || undefined,
       difficulty: difficulty.trim() || undefined,
@@ -125,8 +156,12 @@ export function QuestionFormModal({ initial, onSave, onCancel, nextId = 1 }: Que
     onSave(question)
   }
 
+  const previewOptions = rows
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => r.text.trim() || r.imageUrl.trim() || r.audioUrl.trim())
+
   return (
-    <Modal labelledBy="question-form-title" onClose={onCancel} panelClassName="max-w-lg">
+    <Modal labelledBy="question-form-title" onClose={onCancel} panelClassName="max-w-2xl">
       <div className="flex items-start justify-between gap-3">
         <h2 id="question-form-title" className="text-lg font-semibold">
           {isEdit ? 'Edit question' : 'Add question'}
@@ -159,52 +194,71 @@ export function QuestionFormModal({ initial, onSave, onCancel, nextId = 1 }: Que
             <button
               type="button"
               onClick={addOption}
-              disabled={options.length >= 8}
+              disabled={rows.length >= 8}
               className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-40"
             >
               <IconPlus size={14} /> Add option
             </button>
           </div>
-          <ul className="space-y-2">
-            {options.map((opt, i) => {
+          <ul className="space-y-3">
+            {rows.map((row, i) => {
               const letter = String.fromCharCode(65 + i)
-              const isCorrect = correct.has(opt)
+              const isCorrect = correct.has(row.key)
+              const hasContent = !!row.text.trim() || !!row.imageUrl.trim() || !!row.audioUrl.trim()
               return (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="mt-2 w-5 shrink-0 text-center text-xs font-semibold text-slate-500">
-                    {letter}
-                  </span>
-                  <input
-                    value={opt}
-                    onChange={(e) => updateOption(i, e.target.value)}
-                    placeholder={`Option ${letter}`}
-                    className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
-                  />
-                  <label className="mt-2 flex shrink-0 items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
-                    <input
-                      type="checkbox"
-                      checked={isCorrect}
-                      onChange={() => toggleCorrect(opt)}
-                      disabled={!opt.trim()}
-                      className="size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    Correct
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => removeOption(i)}
-                    disabled={options.length <= 2}
-                    className="mt-1.5 rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 dark:hover:bg-red-950/40"
-                    aria-label="Remove option"
-                  >
-                    <IconTrash size={14} />
-                  </button>
+                <li key={row.key} className="rounded-lg border border-slate-200 p-3 dark:border-slate-800">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-2 w-5 shrink-0 text-center text-xs font-semibold text-slate-500">
+                      {letter}
+                    </span>
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <input
+                        value={row.text}
+                        onChange={(e) => updateRow(i, { text: e.target.value })}
+                        placeholder={`Option ${letter} text (optional if media provided)`}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                      />
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <input
+                          value={row.imageUrl}
+                          onChange={(e) => updateRow(i, { imageUrl: e.target.value })}
+                          placeholder="Image URL (optional)"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                        />
+                        <input
+                          value={row.audioUrl}
+                          onChange={(e) => updateRow(i, { audioUrl: e.target.value })}
+                          placeholder="Audio URL (optional)"
+                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                        />
+                      </div>
+                    </div>
+                    <label className="mt-2 flex shrink-0 items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+                      <input
+                        type="checkbox"
+                        checked={isCorrect}
+                        onChange={() => toggleCorrect(row.key)}
+                        disabled={!hasContent}
+                        className="size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      Correct
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => removeOption(i)}
+                      disabled={rows.length <= 2}
+                      className="mt-1.5 rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 dark:hover:bg-red-950/40"
+                      aria-label="Remove option"
+                    >
+                      <IconTrash size={14} />
+                    </button>
+                  </div>
                 </li>
               )
             })}
           </ul>
           <p className="mt-1 text-xs text-slate-500">
-            Tick one or more options as correct. Multi-select questions are supported.
+            Each option can be text, an image/audio URL, or both. Tick one or more correct answers.
           </p>
         </div>
 
@@ -232,11 +286,11 @@ export function QuestionFormModal({ initial, onSave, onCancel, nextId = 1 }: Que
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium">Image URL (optional)</label>
+            <label className="mb-1 block text-sm font-medium">Question image URL (optional)</label>
             <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium">Audio URL (optional)</label>
+            <label className="mb-1 block text-sm font-medium">Question audio URL (optional)</label>
             <input value={audioUrl} onChange={(e) => setAudioUrl(e.target.value)} placeholder="https://..." className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
           </div>
         </div>
@@ -264,15 +318,15 @@ export function QuestionFormModal({ initial, onSave, onCancel, nextId = 1 }: Que
               <div className="mb-3 font-medium">
                 <MathText>{statement || '(empty question)'}</MathText>
               </div>
-              <ul className="space-y-1">
-                {options.filter((o) => o.trim()).map((o, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="font-semibold text-slate-500">
-                      {String.fromCharCode(65 + i)}.
-                    </span>
-                    <span className={correct.has(o) ? 'font-medium text-green-700 dark:text-green-400' : ''}>
-                      <MathText>{o}</MathText>
-                      {correct.has(o) ? ' ✓' : ''}
+              <ul className="space-y-2">
+                {previewOptions.map(({ r, i }) => (
+                  <li key={r.key} className="flex gap-2">
+                    <span className="font-semibold text-slate-500">{String.fromCharCode(65 + i)}.</span>
+                    <span className={correct.has(r.key) ? 'font-medium text-green-700 dark:text-green-400' : ''}>
+                      {r.text.trim() ? <MathText as="span">{r.text}</MathText> : <span>(media option)</span>}
+                      {r.imageUrl.trim() ? <img src={r.imageUrl.trim()} alt="" className="mt-1 max-h-32 rounded border border-slate-200 object-contain dark:border-slate-700" /> : null}
+                      {r.audioUrl.trim() ? <audio controls src={r.audioUrl.trim()} className="mt-1 w-full" /> : null}
+                      {correct.has(r.key) ? ' ✓' : ''}
                     </span>
                   </li>
                 ))}

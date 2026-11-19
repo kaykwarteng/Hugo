@@ -1,22 +1,22 @@
 import { useEffect, useRef } from 'react'
 import { playSound } from '../services/sound'
 import type { QuizQuestion } from '../types/quiz'
-import { isAnswerCorrect, isMultiAnswer } from '../utils/quiz'
+import { getOptionKey, getOptionMedia, getOptionText, isAnswerCorrect, isMultiAnswer } from '../utils/quiz'
 import { ExplanationPanel } from './ExplanationPanel'
 import { MathText } from './MathText'
 
 interface QuizCardProps {
   question: QuizQuestion
-  /** Submitted answer. For a multi-answer question this also means "locked". */
+  /** Submitted/selected answer keys. */
   selectedAnswers?: string[]
-  /** Options ticked on a multi-answer question but not yet checked. */
+  /** Options ticked on a multi-answer question but not yet checked (legacy). */
   draft?: string[]
   /** True once "Check Answer" has revealed the result for this question. */
   revealed: boolean
-  /** Single-answer questions only. */
-  onSelect: (option: string) => void
-  /** Multi-answer questions only: tick/untick an option. */
-  onToggle: (option: string) => void
+  /** Single-answer questions only (option key). */
+  onSelect: (optionKey: string) => void
+  /** Multi-answer questions only: tick/untick an option key. */
+  onToggle: (optionKey: string) => void
   /** Submit the current selection and reveal whether it was right. */
   onCheck: () => void
 }
@@ -34,29 +34,36 @@ export function QuizCard({
   onCheck,
 }: QuizCardProps) {
   const multi = isMultiAnswer(question)
-  // A question is frozen once its answer has been revealed; a multi-answer one
-  // is frozen by its commit too, which is what a pre-reveal build wrote.
-  const locked = revealed || (multi && selectedAnswers !== undefined)
-  const ticked = locked ? (selectedAnswers ?? []) : multi ? (draft ?? []) : (selectedAnswers ?? [])
-  // What "Check Answer" would judge: a single pick is already an answer, a
-  // multi-answer selection is still a draft until this button commits it.
+  // Frozen only after reveal/check so the verdict stays stable; selections are
+  // saved automatically and count for scoring without checking.
+  const locked = revealed
+  const ticked = revealed
+    ? (selectedAnswers ?? [])
+    : multi
+      ? (selectedAnswers ?? draft ?? [])
+      : (selectedAnswers ?? [])
   const hasSelection = ticked.length > 0
   const correct = revealed && isAnswerCorrect(question, selectedAnswers)
+
+  const labelFor = (key: string) => {
+    const idx = question.options.findIndex((o, i) => getOptionKey(o, i) === key)
+    if (idx === -1) return key
+    const opt = question.options[idx]
+    const text = getOptionText(opt).trim()
+    if (text) return text
+    const media = getOptionMedia(opt)
+    if (media.imageUrl && media.audioUrl) return 'Image & audio'
+    if (media.imageUrl) return 'Image'
+    if (media.audioUrl) return 'Audio'
+    return key
+  }
+  const joinLabels = (keys: string[]) => keys.map(labelFor).join(' · ')
 
   /*
    * The verdict sounds on a *transition*, not on a state: only for a question
    * this component watched go from unrevealed to revealed. Navigating back to
    * an already-checked question, or restoring a session parked on one, is
    * silent, because there was no transition to hear.
-   *
-   * It lives here because line 41 above is the only place the app knows the
-   * verdict — `useQuiz.checkAnswer` computes everything inside a `setSession`
-   * updater, and React runs updaters twice under StrictMode, so a side effect
-   * there would double-fire and the lock it enforces is not worth reshaping.
-   *
-   * The ref survives navigation because App renders `<QuizCard>` without a
-   * `key`, so the instance persists across questions. (The `key` on the root
-   * div below is inside the component and doesn't remount it.)
    */
   const armedFor = useRef<number | null>(null)
   useEffect(() => {
@@ -106,8 +113,11 @@ export function QuizCard({
         className="space-y-3"
       >
         {question.options.map((option, index) => {
-          const selected = ticked.includes(option)
-          const isCorrectOption = question.correctAnswers.includes(option)
+          const optionKey = getOptionKey(option, index)
+          const selected = ticked.includes(optionKey)
+          const isCorrectOption = question.correctAnswers.includes(optionKey)
+          const { imageUrl, audioUrl } = getOptionMedia(option)
+          const text = getOptionText(option)
           // Before the reveal an option only shows "you picked this". After it,
           // colour carries the verdict: green marks every correct option, red
           // marks a pick that wasn't one.
@@ -123,12 +133,12 @@ export function QuizCard({
 
           return (
             <button
-              key={option}
+              key={optionKey}
               type="button"
               role={multi ? 'checkbox' : 'radio'}
               aria-checked={selected}
               disabled={locked}
-              onClick={() => (multi ? onToggle(option) : onSelect(option))}
+              onClick={() => (multi ? onToggle(optionKey) : onSelect(optionKey))}
               className={`flex w-full items-center gap-3 rounded-xl border p-4 text-left transition-all ${
                 tone === 'chosen'
                   ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-500/30 dark:bg-indigo-950/50'
@@ -139,9 +149,7 @@ export function QuizCard({
                       : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
               } ${
                 locked
-                  ? // A revealed card is for reading, so it keeps full contrast;
-                    // an un-revealed lock stays dimmed as before.
-                    revealed
+                  ? revealed
                     ? 'cursor-default'
                     : 'cursor-not-allowed opacity-70'
                   : selected
@@ -173,8 +181,13 @@ export function QuizCard({
                     ? '✓'
                     : (OPTION_KEYS[index] ?? index + 1)}
               </span>
-              <span className="flex-1 text-sm sm:text-base">
-                <MathText>{option}</MathText>
+              <span className="flex min-w-0 flex-1 flex-col gap-2 text-sm sm:text-base">
+                {text ? <MathText as="span">{text}</MathText> : null}
+                {imageUrl ? (
+                  <img src={imageUrl} alt="" className="max-h-48 w-full rounded-lg border border-slate-200 object-contain dark:border-slate-700" loading="lazy" />
+                ) : null}
+                {audioUrl ? <audio controls src={audioUrl} className="w-full" /> : null}
+                {!text && !imageUrl && !audioUrl ? <span className="text-slate-500">Option {index + 1}</span> : null}
               </span>
               {revealed && (tone === 'right' || tone === 'wrong') && (
                 <span
@@ -216,7 +229,7 @@ export function QuizCard({
           >
             {correct
               ? '✓ Correct'
-              : selectedAnswers === undefined
+              : selectedAnswers === undefined || selectedAnswers.length === 0
                 ? '✗ Not answered'
                 : multi
                   ? '✗ Not quite — your selection is incomplete or has an extra option'
@@ -226,28 +239,22 @@ export function QuizCard({
             <span className="font-medium">
               {multi ? `Correct answers (${question.correctAnswers.length}):` : 'Correct answer:'}
             </span>{' '}
-            {question.correctAnswers.join(' · ')}
+            {joinLabels(question.correctAnswers)}
           </p>
-          {!correct && selectedAnswers !== undefined && (
+          {!correct && selectedAnswers !== undefined && selectedAnswers.length > 0 && (
             <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              <span className="font-medium">You chose:</span> {selectedAnswers.join(' · ')}
+              <span className="font-medium">You chose:</span> {joinLabels(selectedAnswers)}
             </p>
           )}
         </div>
       )}
 
-      {/* Checking is deliberate and one-way: it locks the question in at the
-          answer on screen, and never moves the quiz along by itself. */}
+      {/* Selections are saved automatically; checking is optional feedback that
+          reveals the verdict and locks the question. */}
       <div className="mt-5">
         {revealed ? (
           <p className="inline-flex min-h-11 items-center rounded-xl bg-slate-100 px-4 text-sm font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
             ✓ Answer checked — review it above, then continue when you're ready.
-          </p>
-        ) : locked ? (
-          // Committed by a build that predates the reveal, so there is nothing
-          // left to check on this one.
-          <p className="rounded-xl border border-green-300 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800 dark:border-green-900 dark:bg-green-950/50 dark:text-green-400">
-            ✓ Answer recorded ({ticked.length} selected)
           </p>
         ) : (
           <>
@@ -261,10 +268,12 @@ export function QuizCard({
             </button>
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
               {hasSelection
-                ? 'Reveals the correct answer. Your choice is locked in once checked.'
+                ? multi
+                  ? 'Selection saved. You can change it, or check to see if you’re right (locks this question).'
+                  : 'Answer saved. You can change it, or check to see if you’re right (locks this question).'
                 : multi
-                  ? 'Tick the options you think are correct, then check.'
-                  : 'Pick an option to check it.'}
+                  ? 'Tick the options you think are correct. Your selection is saved automatically.'
+                  : 'Pick an option. Your answer is saved automatically.'}
             </p>
           </>
         )}

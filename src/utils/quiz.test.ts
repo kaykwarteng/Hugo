@@ -76,11 +76,10 @@ describe('checking an answer mid-quiz', () => {
     expect(isQuestionLocked(sessionWith([single], answers, [2]), single)).toBe(true)
   })
 
-  it('keeps a committed multi-answer question locked even without a reveal', () => {
-    // This is what a session written before "Check Answer" existed looks like.
+  it('does not lock a multi-answer selection before reveal (saved but editable)', () => {
     const session = sessionWith([multi], { 1: ['Windows'] })
     expect(isRevealed(session, 1)).toBe(false)
-    expect(isQuestionLocked(session, multi)).toBe(true)
+    expect(isQuestionLocked(session, multi)).toBe(false)
   })
 
   it('leaves an unanswered question open', () => {

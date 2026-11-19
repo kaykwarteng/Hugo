@@ -56,12 +56,15 @@ export function useQuiz() {
 
   const toggleDraft = useCallback((questionId: number, option: string) => {
     setSession((s) => {
-      if (!s || s.status !== 'active' || s.answers[questionId] !== undefined) return s
-      if (s.revealed.includes(questionId)) return s
-      return {
-        ...s,
-        drafts: { ...s.drafts, [questionId]: toggleOption(s.drafts[questionId] ?? [], option) },
-      }
+      if (!s || s.status !== 'active' || s.revealed.includes(questionId)) return s
+      const prev = s.answers[questionId] ?? s.drafts[questionId] ?? []
+      const next = toggleOption(prev, option)
+      const answers = { ...s.answers }
+      if (next.length === 0) delete answers[questionId]
+      else answers[questionId] = next
+      const drafts = { ...s.drafts }
+      delete drafts[questionId]
+      return { ...s, answers, drafts }
     })
   }, [])
 
@@ -72,14 +75,21 @@ export function useQuiz() {
       if (question === undefined) return s
 
       const revealed = [...s.revealed, questionId]
-      if (s.answers[questionId] !== undefined) return { ...s, revealed }
-      if (!isMultiAnswer(question)) return s
-
-      const draft = s.drafts[questionId]
-      if (draft === undefined || draft.length === 0) return s
-      const drafts = { ...s.drafts }
-      delete drafts[questionId]
-      return { ...s, answers: { ...s.answers, [questionId]: draft }, drafts, revealed }
+      // Commit any legacy unsubmitted multi-select draft before revealing.
+      if (isMultiAnswer(question) && s.answers[questionId] === undefined) {
+        const draft = s.drafts[questionId]
+        if (draft && draft.length > 0) {
+          const drafts = { ...s.drafts }
+          delete drafts[questionId]
+          return { ...s, answers: { ...s.answers, [questionId]: draft }, drafts, revealed }
+        }
+      }
+      if (s.drafts[questionId] !== undefined) {
+        const drafts = { ...s.drafts }
+        delete drafts[questionId]
+        return { ...s, drafts, revealed }
+      }
+      return { ...s, revealed }
     })
   }, [])
 
@@ -108,9 +118,30 @@ export function useQuiz() {
   }, [])
 
   const finishQuiz = useCallback(() => {
-    setSession((s) =>
-      s && s.status === 'active' ? { ...s, status: 'finished', finishedAt: Date.now() } : s,
-    )
+    setSession((s) => {
+      if (!s || s.status === 'finished') return s
+      let answers = s.answers
+      let drafts = s.drafts
+      let changed = false
+      for (const q of s.questions) {
+        const draft = drafts[q.id]
+        if (answers[q.id] === undefined && draft && draft.length > 0) {
+          if (!changed) {
+            answers = { ...answers }
+            drafts = { ...drafts }
+            changed = true
+          }
+          answers[q.id] = draft
+          delete drafts[q.id]
+        }
+      }
+      return {
+        ...s,
+        ...(changed ? { answers, drafts } : {}),
+        status: 'finished',
+        finishedAt: Date.now(),
+      }
+    })
   }, [])
 
   const retryQuiz = useCallback(() => {

@@ -1,12 +1,22 @@
+/** A selectable answer option. Strings are supported for backward compatibility. */
+export interface QuizOptionObject {
+  /** Stable identity used in answers/correctAnswers; defaults from text/media. */
+  id?: string
+  text?: string
+  imageUrl?: string
+  audioUrl?: string
+}
+
+export type QuizOption = string | QuizOptionObject
+
 /** A multiple-choice question. Two or more correct answers = multi-select. */
 export interface QuizQuestion {
   id: number
   question: string
-  options: string[]
+  options: QuizOption[]
   /**
-   * Every option that counts as correct, always at least one. A length above
-   * one is what puts the question into multi-select mode — there is no
-   * separate "type" flag to keep in sync.
+   * Every option that counts as correct (matched by option key), always at least one.
+   * A length above one puts the question into multi-select mode.
    */
   correctAnswers: string[]
   explanation?: string
