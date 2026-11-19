@@ -1,5 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AIAnswerExplanation } from './components/AIAnswerExplanation'
+import { MasteryDashboard } from './components/MasteryDashboard'
+import { FlashcardSession } from './components/FlashcardSession'
+import { useMastery } from './hooks/useMastery'
 import { AIBusyOverlay } from './components/AIBusyOverlay'
 import { AISettings } from './components/AISettings'
 import { AIVerificationPanel } from './components/AIVerificationPanel'
@@ -30,8 +33,8 @@ import { useTheme } from './hooks/useTheme'
 import { useTimer } from './hooks/useTimer'
 import { PROVIDERS } from './services/ai/models'
 import { isSoundSupported, playSound } from './services/sound'
-import { masteryKey } from './services/storage'
-import { apiDeleteSession, apiListSessions, apiRecordMastery, apiUpsertSession, type ActiveSessionRecord } from './services/api'
+import { masteryKey } from './utils/mastery'
+import { apiDeleteAttempt, apiDeleteSession, apiListSessions, apiRecordMastery, apiUpsertSession, type ActiveSessionRecord } from './services/api'
 import type { AIRequestKind } from './types/ai'
 import type { View } from './types/navigation'
 import type { QuizAttempt, QuizQuestion, QuizSession, SavedQuiz } from './types/quiz'
@@ -65,6 +68,7 @@ export default function App() {
   const library = useSavedQuizzes()
   const coursesApi = useCourses()
   const history = useQuizHistory()
+  const masteryApi = useMastery()
   // The AI assistant owns its own state so this component doesn't grow one
   // branch per workflow; everything below just reads `ai.ready`.
   const ai = useAI()
@@ -92,8 +96,10 @@ export default function App() {
   }, [refreshCourseSessions, view])
   // Which saved quiz's history/detail is open, and which attempt is being reviewed.
   const [historyQuizId, setHistoryQuizId] = useState<string | null>(null)
+  const [courseQuizConfigRequest, setCourseQuizConfigRequest] = useState<string | null>(null)
   const [openQuizId, setOpenQuizId] = useState<string | null>(null)
   const [reviewAttempt, setReviewAttempt] = useState<QuizAttempt | null>(null)
+  const [flashcards, setFlashcards] = useState<{ questions: QuizQuestion[]; scopeId: string; title: string } | null>(null)
   // Checks for the constructor only — asking never creates an AudioContext.
   const [soundSupported] = useState(isSoundSupported)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -151,17 +157,21 @@ export default function App() {
           await apiDeleteSession(session.quizId).then(setCourseSessions).catch(() => {})
         }
         const scope = session.quizId ?? session.attemptId
-        for (const q of session.questions) {
-          const ans = session.answers[q.id]
-          if (ans === undefined) continue
-          const correct = checkAnswerCorrect(q, ans)
-          await apiRecordMastery(masteryKey(scope, q.id), q.id, correct).catch(() => {})
+        if (masteryApi.isScopeEnabled(scope)) {
+          let changed = false
+          for (const q of session.questions) {
+            const ans = session.answers[q.id]
+            if (ans === undefined) continue
+            const correct = checkAnswerCorrect(q, ans)
+            await apiRecordMastery(masteryKey(scope, q.id), q.id, correct).then(() => { changed = true }).catch(() => {})
+          }
+          if (changed) void masteryApi.refresh()
         }
       } catch {
         recordedRef.current.delete(session.attemptId)
       }
     })()
-  }, [session, recordSession, completeProgress])
+  }, [session, recordSession, completeProgress, masteryApi])
 
   // Every screen change starts at the top. Without this a tall screen (a long
   // paste, a finished result) leaves the next one scrolled halfway down, which
@@ -202,6 +212,40 @@ export default function App() {
     },
     [session, resetQuiz],
   )
+
+  const startMasteryReview = useCallback((target: { questions: QuizQuestion[]; quizId?: string; quizName: string; scopeId?: string }) => {
+    if (target.questions.length === 0) return
+    quiz.startQuiz(target.questions, { shuffleQuestions: true, shuffleOptions: false, timerMinutes: 0, categories: [], passPercentage: 70 }, {
+      quizId: target.quizId ?? target.scopeId,
+      quizName: target.quizName,
+    })
+  }, [quiz])
+
+  const startFlashcards = useCallback((target: { questions: QuizQuestion[]; scopeId: string; quizName: string }) => {
+    if (target.questions.length === 0) return
+    setFlashcards({ questions: target.questions, scopeId: target.scopeId, title: target.quizName })
+  }, [])
+
+  const resetMasteryScope = useCallback(async (scopeId: string) => {
+    await masteryApi.resetScopeMastery(scopeId)
+    // Also clear scope-related stored progress/details (attempt history, resumable session, saved-quiz progress).
+    const scopeAttempts = history.attempts.filter((a) => a.quizId === scopeId)
+    if (scopeAttempts.length > 0) {
+      await Promise.all(scopeAttempts.map((a) => apiDeleteAttempt(a.id).catch(() => {})))
+    }
+    if (scopeId.startsWith('course:')) {
+      await apiDeleteSession(scopeId).catch(() => {})
+    } else {
+      await apiDeleteSession(scopeId).catch(() => {})
+      await library.clearProgress(scopeId).catch(() => {})
+    }
+    await Promise.allSettled([
+      masteryApi.refresh(),
+      history.refresh(),
+      refreshCourseSessions(),
+      library.refresh(),
+    ])
+  }, [masteryApi, history, library, refreshCourseSessions])
 
   /** Send a question bank to the setup screen, optionally tied to a saved quiz. */
   const openSetup = useCallback((questions: QuizQuestion[], saved: SavedQuiz | null) => {
@@ -245,6 +289,8 @@ export default function App() {
   const handleDeleteQuiz = useCallback(
     (saved: SavedQuiz) => {
       void library.removeQuiz(saved.id).then(() => {
+        void masteryApi.setScopeEnabled(saved.id, false).catch(() => {})
+        void masteryApi.refresh().catch(() => {})
         void refreshHistory()
         if (historyQuizId === saved.id) setHistoryQuizId(null)
         if (openQuizId === saved.id) setOpenQuizId(null)
@@ -253,7 +299,7 @@ export default function App() {
         if (pendingQuiz?.id === saved.id) clearSetup()
       }).catch(() => {})
     },
-    [library, refreshHistory, historyQuizId, openQuizId, reviewAttempt, session, resetQuiz, pendingQuiz, clearSetup],
+    [library, refreshHistory, historyQuizId, openQuizId, reviewAttempt, session, resetQuiz, pendingQuiz, clearSetup, masteryApi],
   )
 
   const handleDeleteAttempt = useCallback(
@@ -289,14 +335,25 @@ export default function App() {
     setView(wasSaved ? 'library' : 'home')
   }, [session, resetQuiz])
 
-  const historyQuiz = historyQuizId ? library.quizzes.find((q) => q.id === historyQuizId) ?? null : null
+  const historyTarget = useMemo(() => {
+    if (!historyQuizId) return null
+    const saved = library.quizzes.find((q) => q.id === historyQuizId)
+    if (saved) return { kind: 'saved' as const, id: saved.id, name: saved.name, quiz: saved }
+    if (historyQuizId.startsWith('course:')) {
+      const courseId = historyQuizId.slice('course:'.length)
+      const course = coursesApi.courses.find((c) => c.id === courseId)
+      if (course) return { kind: 'course' as const, id: historyQuizId, name: course.name, courseId }
+    }
+    // fallback for orphan/unknown scopes with attempts
+    return { kind: 'scope' as const, id: historyQuizId, name: historyQuizId }
+  }, [historyQuizId, library.quizzes, coursesApi.courses])
   const openQuiz = openQuizId ? library.quizzes.find((q) => q.id === openQuizId) ?? null : null
   const activeSession =
-    reviewAttempt === null && historyQuiz === null && openQuiz === null && session !== null && session.status === 'active'
+    reviewAttempt === null && historyTarget === null && openQuiz === null && session !== null && session.status === 'active'
       ? session
       : null
   const finishedSession =
-    reviewAttempt === null && historyQuiz === null && openQuiz === null && session !== null && session.status === 'finished'
+    reviewAttempt === null && historyTarget === null && openQuiz === null && session !== null && session.status === 'finished'
       ? session
       : null
 
@@ -327,7 +384,7 @@ export default function App() {
 
   // The library and results screens use their width; reading screens stay
   // narrow so long questions don't run across the whole monitor.
-  const wide = reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view !== 'create'
+  const wide = reviewAttempt === null && historyTarget === null && openQuiz === null && finishedSession === null && view !== 'create'
 
   const dialogs = (
     <>
@@ -362,6 +419,18 @@ export default function App() {
     </>
   )
 
+  if (flashcards !== null) {
+    return (
+      <FlashcardSession
+        questions={flashcards.questions}
+        scopeId={flashcards.scopeId}
+        title={flashcards.title}
+        onExit={() => setFlashcards(null)}
+        onProgress={() => void masteryApi.refresh()}
+      />
+    )
+  }
+
   // While a quiz is being answered the app navigation is replaced by the
   // quiz's own compact bar, so nothing invites an accidental exit.
   if (activeSession !== null) {
@@ -391,6 +460,15 @@ export default function App() {
           <ResultScreen
             session={attemptToSession(reviewAttempt)}
             onNewQuiz={() => setReviewAttempt(null)}
+            onRetryIncorrect={() => {
+              const incorrect = reviewAttempt.questions.filter((q) => !checkAnswerCorrect(q, reviewAttempt.answers[q.id]))
+              if (incorrect.length === 0) return
+              quiz.startQuiz(incorrect, { ...reviewAttempt.settings, questionCount: undefined }, {
+                quizId: reviewAttempt.quizId,
+                quizName: `${reviewAttempt.quizName} (incorrect only)`,
+              })
+              setReviewAttempt(null)
+            }}
             newQuizLabel={
               historyQuizId !== null
                 ? 'Back to history'
@@ -404,39 +482,36 @@ export default function App() {
           />
         )}
 
-        {/* 2. A saved quiz's results history. */}
-        {reviewAttempt === null && historyQuiz !== null && (
+        {/* 2. Results history for a saved quiz or course scope. */}
+        {reviewAttempt === null && historyTarget !== null && (
           <QuizHistory
-            quiz={historyQuiz}
-            attempts={history.forQuiz(historyQuiz.id)}
+            quiz={{ id: historyTarget.id, name: historyTarget.name }}
+            attempts={history.forQuiz(historyTarget.id)}
             onBack={() => setHistoryQuizId(null)}
             backLabel={view === 'results' ? 'Results' : 'Quiz Library'}
-            onRetake={() => openSetup(historyQuiz.questions, historyQuiz)}
+            onRetake={() => {
+              if (historyTarget.kind === 'saved') {
+                openSetup(historyTarget.quiz.questions, historyTarget.quiz)
+                return
+              }
+              if (historyTarget.kind === 'course') {
+                setHistoryQuizId(null)
+                setView('library')
+                setCourseQuizConfigRequest(historyTarget.courseId)
+              }
+            }}
             onReview={setReviewAttempt}
             onDeleteAttempt={handleDeleteAttempt}
           />
         )}
 
         {/* 2b. Standalone quiz question management. */}
-        {reviewAttempt === null && historyQuiz === null && openQuiz !== null && (
+        {reviewAttempt === null && historyTarget === null && openQuiz !== null && (
           <SavedQuizDetail
             quiz={openQuiz}
             onBack={() => setOpenQuizId(null)}
             onStart={() => openSetup(openQuiz.questions, openQuiz)}
-            onAddQuestion={(q) => { void library.updateQuiz(openQuiz.id, [...openQuiz.questions, q]).catch(() => {}) }}
-            onAddQuestions={(qs) => { void library.updateQuiz(openQuiz.id, [...openQuiz.questions, ...qs]).catch(() => {}) }}
-            onUpdateQuestion={(q) => {
-              void library.updateQuiz(
-                openQuiz.id,
-                openQuiz.questions.map((x) => (x.id === q.id ? q : x)),
-              ).catch(() => {})
-            }}
-            onDeleteQuestion={(questionId) => {
-              void library.updateQuiz(
-                openQuiz.id,
-                openQuiz.questions.filter((q) => q.id !== questionId),
-              ).catch(() => {})
-            }}
+            onReplaceQuestions={(qs) => { void library.updateQuiz(openQuiz.id, qs).catch(() => {}) }}
             nextQuestionId={openQuiz.questions.reduce((max, q) => Math.max(max, q.id), 0) + 1}
           />
         )}
@@ -446,6 +521,14 @@ export default function App() {
           <FinishedQuiz
             session={finishedSession}
             onRetry={quiz.retryQuiz}
+            onRetryIncorrect={() => {
+              const incorrect = finishedSession.questions.filter((q) => !checkAnswerCorrect(q, finishedSession.answers[q.id]))
+              if (incorrect.length === 0) return
+              quiz.startQuiz(incorrect, { ...finishedSession.settings, questionCount: undefined }, {
+                quizId: finishedSession.quizId,
+                quizName: finishedSession.quizName ? `${finishedSession.quizName} (incorrect only)` : 'Incorrect only',
+              })
+            }}
             onCreateQuiz={() => navigate('create')}
             onLibrary={() => navigate('library')}
             onHome={() => navigate('home')}
@@ -455,7 +538,7 @@ export default function App() {
         )}
 
         {/* 4. Create Quiz — paste, then review and configure. */}
-        {reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view === 'create' && (
+        {reviewAttempt === null && historyTarget === null && openQuiz === null && finishedSession === null && view === 'create' && (
           <div className="space-y-5">
             <div className="space-y-3">
               <h1 className="text-2xl font-bold tracking-tight">Create Quiz</h1>
@@ -534,7 +617,7 @@ export default function App() {
         )}
 
         {/* 5. Quiz Library — hierarchical courses + standalone quizzes. */}
-        {reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view === 'library' && (
+        {reviewAttempt === null && historyTarget === null && openQuiz === null && finishedSession === null && view === 'library' && (
           <div className="space-y-10">
             {(coursesApi.error || library.error || history.error) && (
               <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
@@ -547,17 +630,28 @@ export default function App() {
             {(coursesApi.loading || library.loading || history.loading) && !(coursesApi.error || library.error || history.error) && (
               <p className="text-sm text-slate-500">Loading library from database…</p>
             )}
+            <MasteryDashboard
+              mastery={masteryApi.mastery}
+              enabledScopes={masteryApi.enabledScopes}
+              quizzes={library.quizzes}
+              courses={coursesApi.courses}
+              onStartReview={startMasteryReview}
+              onStartFlashcards={startFlashcards}
+              onResetScope={resetMasteryScope}
+            />
             <CourseLibrary
               courses={coursesApi.courses}
               onAddCourse={coursesApi.addCourse}
               onRenameCourse={coursesApi.renameCourse}
-              onRemoveCourse={coursesApi.removeCourse}
+              onRemoveCourse={async (id) => {
+                await coursesApi.removeCourse(id)
+                await masteryApi.setScopeEnabled(`course:${id}`, false).catch(() => {})
+                await masteryApi.resetScopeMastery(`course:${id}`).catch(() => {})
+              }}
               onAddChapter={coursesApi.addChapter}
               onRenameChapter={coursesApi.renameChapter}
               onRemoveChapter={coursesApi.removeChapter}
-              onAddQuestionsToChapter={coursesApi.addQuestionsToChapter}
-              onUpdateQuestion={coursesApi.updateQuestion}
-              onDeleteQuestion={coursesApi.deleteQuestion}
+              onSetChapterQuestions={coursesApi.setChapterQuestions}
               onMoveQuestion={coursesApi.moveQuestion}
               nextQuestionId={coursesApi.nextQuestionId}
               onStartQuiz={(questions, settings, meta) => {
@@ -596,6 +690,11 @@ export default function App() {
                 navigate('create')
               }}
               statsForCourse={(courseId) => history.statsFor(`course:${courseId}`)}
+              onViewCourseResults={(scopeId) => setHistoryQuizId(scopeId)}
+              isMasteryEnabled={masteryApi.isScopeEnabled}
+              onToggleMastery={(scopeId, enabled) => { void masteryApi.setScopeEnabled(scopeId, enabled) }}
+              openQuizConfigCourseId={courseQuizConfigRequest}
+              onOpenQuizConfigConsumed={() => setCourseQuizConfigRequest(null)}
               standaloneSlot={
                 library.quizzes.length > 0 ? (
                   <div className="mt-10 border-t border-slate-200 pt-8 dark:border-slate-800">
@@ -611,6 +710,8 @@ export default function App() {
                       onRename={handleRename}
                       onDelete={handleDeleteQuiz}
                       onCreate={() => navigate('create')}
+                      isMasteryEnabled={masteryApi.isScopeEnabled}
+                      onToggleMastery={(quizId, enabled) => { void masteryApi.setScopeEnabled(quizId, enabled) }}
                     />
                   </div>
                 ) : null
@@ -620,7 +721,7 @@ export default function App() {
         )}
 
         {/* 6. Results — every attempt, across every quiz. */}
-        {reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view === 'results' && (
+        {reviewAttempt === null && historyTarget === null && openQuiz === null && finishedSession === null && view === 'results' && (
           <RecentResults
             attempts={allAttempts}
             heading="Results"
@@ -651,7 +752,7 @@ export default function App() {
         )}
 
         {/* 7. Home. */}
-        {reviewAttempt === null && historyQuiz === null && openQuiz === null && finishedSession === null && view === 'home' && (
+        {reviewAttempt === null && historyTarget === null && openQuiz === null && finishedSession === null && view === 'home' && (
           <HomeDashboard
             onNavigate={navigate}
             resumable={resumable}
@@ -659,6 +760,16 @@ export default function App() {
             savedCount={library.quizzes.length}
             attemptCount={history.attempts.length}
           >
+            <MasteryDashboard
+              mastery={masteryApi.mastery}
+              enabledScopes={masteryApi.enabledScopes}
+              quizzes={library.quizzes}
+              courses={coursesApi.courses}
+              onStartReview={startMasteryReview}
+              onStartFlashcards={startFlashcards}
+              onResetScope={resetMasteryScope}
+              compact
+            />
             <RecentResults
               attempts={history.recent(RECENT_RESULTS_LIMIT)}
               onReview={setReviewAttempt}
@@ -679,6 +790,7 @@ export default function App() {
 interface FinishedQuizProps {
   session: QuizSession
   onRetry: () => void
+  onRetryIncorrect: () => void
   onCreateQuiz: () => void
   onLibrary: () => void
   onHome: () => void
@@ -690,6 +802,7 @@ interface FinishedQuizProps {
 function FinishedQuiz({
   session,
   onRetry,
+  onRetryIncorrect,
   onCreateQuiz,
   onLibrary,
   onHome,
@@ -701,6 +814,7 @@ function FinishedQuiz({
     <ResultScreen
       session={session}
       onRetry={onRetry}
+      onRetryIncorrect={onRetryIncorrect}
       onNewQuiz={onCreateQuiz}
       newQuizLabel="Create Quiz"
       onLibrary={onLibrary}

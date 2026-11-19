@@ -3,7 +3,7 @@ import { formatRelativeDay, progressSummary } from '../utils/library'
 import { getCategories } from '../utils/quiz'
 import type { MenuAction } from './OverflowMenu'
 import { OverflowMenu } from './OverflowMenu'
-import { IconEdit, IconPlay } from './icons/Icons'
+import { IconChart, IconEdit, IconGraduationCap, IconPlay, IconRefresh, IconTrash, IconX } from './icons/Icons'
 
 interface SavedQuizCardProps {
   quiz: SavedQuiz
@@ -20,6 +20,8 @@ interface SavedQuizCardProps {
   onViewResults: () => void
   onRename: () => void
   onDelete: () => void
+  masteryEnabled?: boolean
+  onToggleMastery?: (enabled: boolean) => void
 }
 
 const STATUS_LABEL: Record<AttemptStatus, string> = {
@@ -54,6 +56,8 @@ export function SavedQuizCard({
   onViewResults,
   onRename,
   onDelete,
+  masteryEnabled,
+  onToggleMastery,
 }: SavedQuizCardProps) {
   const categories = getCategories(quiz.questions)
   const shownCategories = categories.slice(0, 3)
@@ -62,18 +66,26 @@ export function SavedQuizCard({
   const actions: MenuAction[] = [
     ...(status === 'in-progress'
       ? [
-          { label: 'Start again', onSelect: onStartOver },
-          { label: 'Discard in-progress quiz', onSelect: onDiscardProgress },
+          { label: 'Start again', icon: <IconRefresh size={14} />, onSelect: onStartOver },
+          { label: 'Discard in-progress quiz', icon: <IconX size={14} />, onSelect: onDiscardProgress },
         ]
       : []),
     {
       label: 'View results',
+      icon: <IconChart size={14} />,
       onSelect: onViewResults,
       disabled: stats.attempts === 0,
       title: stats.attempts === 0 ? 'No attempts yet' : undefined,
     },
-    { label: 'Rename', onSelect: onRename },
-    { label: 'Delete', onSelect: onDelete, danger: true },
+    ...(onToggleMastery
+      ? [{
+          label: masteryEnabled ? 'Disable mastery mode' : 'Enable mastery mode',
+          icon: <IconGraduationCap size={14} />,
+          onSelect: () => onToggleMastery(!masteryEnabled),
+        }]
+      : []),
+    { label: 'Rename', icon: <IconEdit size={14} />, onSelect: onRename },
+    { label: 'Delete', icon: <IconTrash size={14} />, onSelect: onDelete, danger: true },
   ]
 
   return (
@@ -112,6 +124,11 @@ export function SavedQuizCard({
         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLASS[status]}`}>
           {STATUS_LABEL[status]}
         </span>
+        {masteryEnabled && (
+          <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+            Mastery
+          </span>
+        )}
         {progress !== null && (
           <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
             {progress.percent}% · {progress.answered}/{progress.total} answered

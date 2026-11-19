@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import type { QuizAttempt, QuizSettings, SavedQuiz } from '../types/quiz'
+import type { QuizAttempt, QuizSettings } from '../types/quiz'
 import { computeHistoryStats, formatDateTime } from '../utils/library'
 import { formatTime } from '../utils/quiz'
 import { ConfirmDialog } from './ConfirmDialog'
 
 interface QuizHistoryProps {
-  quiz: SavedQuiz
+  quiz: { id: string; name: string }
   /** Attempts for this quiz, newest first. */
   attempts: QuizAttempt[]
   onBack: () => void

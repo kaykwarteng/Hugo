@@ -30,6 +30,7 @@ export function QuizSetup({ questions, onStart, onDiscard }: QuizSetupProps) {
   const [timerMinutes, setTimerMinutes] = useState(30)
   const [passPercentage, setPassPercentage] = useState(DEFAULT_PASS_PERCENTAGE)
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [questionCount, setQuestionCount] = useState<number | ''>('')
 
   // Filtering, shuffling and persisting the session is synchronous; yield a
   // frame first so the spinner is visible while it happens.
@@ -41,9 +42,11 @@ export function QuizSetup({ questions, onStart, onDiscard }: QuizSetupProps) {
     )
   }
 
-  const effectiveCount = selectedCategories.length
+  const availableCount = selectedCategories.length
     ? questions.filter((q) => q.category && selectedCategories.includes(q.category)).length
     : questions.length
+  const effectiveCount =
+    questionCount === '' || questionCount <= 0 ? availableCount : Math.min(Number(questionCount), availableCount)
 
   return (
     <div className="animate-fade-slide-in rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8 dark:border-slate-800 dark:bg-slate-900">
@@ -140,6 +143,25 @@ export function QuizSetup({ questions, onStart, onDiscard }: QuizSetupProps) {
           </div>
 
           <div>
+            <label htmlFor="question-count" className="mb-1.5 block text-sm font-medium">
+              Number of questions
+            </label>
+            <input
+              id="question-count"
+              type="number"
+              min={1}
+              max={availableCount || 1}
+              value={questionCount}
+              onChange={(e) => setQuestionCount(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
+              placeholder={`All (${availableCount})`}
+              className={numberField}
+            />
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+              Leave blank to include all matching questions.
+            </p>
+          </div>
+
+          <div>
             <label htmlFor="pass-mark" className="mb-1.5 block text-sm font-medium">
               Pass mark (%)
             </label>
@@ -200,6 +222,7 @@ export function QuizSetup({ questions, onStart, onDiscard }: QuizSetupProps) {
                 timerMinutes: timerEnabled ? Math.max(1, Number(timerMinutes) || 30) : 0,
                 categories: selectedCategories,
                 passPercentage,
+                questionCount: questionCount === '' ? undefined : Math.min(Number(questionCount), availableCount),
               }),
             )
           }

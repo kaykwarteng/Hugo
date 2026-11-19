@@ -23,6 +23,8 @@ interface SavedQuizListProps {
   onDelete: (quiz: SavedQuiz) => void
   /** Takes the user to the import screen, from the header and the empty state. */
   onCreate: () => void
+  isMasteryEnabled?: (quizId: string) => boolean
+  onToggleMastery?: (quizId: string, enabled: boolean) => void
 }
 
 /** The Quiz Library, plus the rename / start-over / delete confirmation flows. */
@@ -38,6 +40,8 @@ export function SavedQuizList({
   onRename,
   onDelete,
   onCreate,
+  isMasteryEnabled,
+  onToggleMastery,
 }: SavedQuizListProps) {
   const [pendingDelete, setPendingDelete] = useState<SavedQuiz | null>(null)
   const [pendingRename, setPendingRename] = useState<SavedQuiz | null>(null)
@@ -98,6 +102,8 @@ export function SavedQuizList({
                 onViewResults={() => onViewResults(quiz)}
                 onRename={() => setPendingRename(quiz)}
                 onDelete={() => setPendingDelete(quiz)}
+                masteryEnabled={isMasteryEnabled?.(quiz.id) ?? false}
+                onToggleMastery={onToggleMastery ? (enabled) => onToggleMastery(quiz.id, enabled) : undefined}
               />
             )
           })}

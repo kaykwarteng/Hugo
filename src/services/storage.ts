@@ -92,6 +92,10 @@ function normalizeIdList(value: unknown): number[] {
 
 export function normalizeSettings(value: unknown): QuizSettings {
   const raw = isRecord(value) ? value : {}
+  const questionCount =
+    typeof raw.questionCount === 'number' && Number.isFinite(raw.questionCount) && raw.questionCount > 0
+      ? Math.round(raw.questionCount)
+      : undefined
   return {
     shuffleQuestions: raw.shuffleQuestions === true,
     shuffleOptions: raw.shuffleOptions === true,
@@ -101,6 +105,7 @@ export function normalizeSettings(value: unknown): QuizSettings {
         ? (raw.categories as string[])
         : [],
     passPercentage: normalizePassPercentage(raw.passPercentage),
+    questionCount,
   }
 }
 

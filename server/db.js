@@ -138,6 +138,20 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_saved_quizzes_updated ON saved_quizzes(updated_at DESC);
 `)
 
+// Additive migrations for question metadata/media fields.
+{
+  const cols = new Set(db.prepare(`PRAGMA table_info(questions)`).all().map((c) => c.name))
+  for (const [name, def] of [
+    ['image_url', 'TEXT'],
+    ['audio_url', 'TEXT'],
+    ['flagged', 'INTEGER'],
+    ['bookmarked', 'INTEGER'],
+    ['note', 'TEXT'],
+  ]) {
+    if (!cols.has(name)) db.exec(`ALTER TABLE questions ADD COLUMN ${name} ${def}`)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -159,6 +173,11 @@ function rowToQuestion(row) {
     explanation: row.explanation || undefined,
     category: row.category || undefined,
     difficulty: row.difficulty || undefined,
+    imageUrl: row.image_url || undefined,
+    audioUrl: row.audio_url || undefined,
+    flagged: row.flagged ? true : undefined,
+    bookmarked: row.bookmarked ? true : undefined,
+    note: row.note || undefined,
   }
 }
 
@@ -185,7 +204,7 @@ function loadChapters(courseId) {
     .all(courseId)
 
   const qStmt = db.prepare(
-    `SELECT id, question, options_json, correct_json, explanation, category, difficulty
+    `SELECT id, question, options_json, correct_json, explanation, category, difficulty, image_url, audio_url, flagged, bookmarked, note
      FROM questions WHERE chapter_id = ? ORDER BY sort_order ASC, id ASC`,
   )
 
@@ -347,9 +366,9 @@ export function upsertCourse(course) {
     const deleteQuestions = db.prepare(`DELETE FROM questions WHERE chapter_id = ?`)
     const insertQuestion = db.prepare(
       `INSERT INTO questions
-         (id, chapter_id, question, options_json, correct_json, explanation, category, difficulty, sort_order)
+         (id, chapter_id, question, options_json, correct_json, explanation, category, difficulty, image_url, audio_url, flagged, bookmarked, note, sort_order)
        VALUES
-         (@id, @chapterId, @question, @optionsJson, @correctJson, @explanation, @category, @difficulty, @sortOrder)`,
+         (@id, @chapterId, @question, @optionsJson, @correctJson, @explanation, @category, @difficulty, @imageUrl, @audioUrl, @flagged, @bookmarked, @note, @sortOrder)`,
     )
 
     for (const ch of course.chapters || []) {
@@ -371,6 +390,11 @@ export function upsertCourse(course) {
           explanation: q.explanation ?? null,
           category: q.category ?? null,
           difficulty: q.difficulty ?? null,
+          imageUrl: q.imageUrl ?? null,
+          audioUrl: q.audioUrl ?? null,
+          flagged: q.flagged ? 1 : 0,
+          bookmarked: q.bookmarked ? 1 : 0,
+          note: q.note ?? null,
           sortOrder: i,
         })
       })
@@ -382,7 +406,12 @@ export function upsertCourse(course) {
 }
 
 export function deleteCourse(id) {
-  db.prepare(`DELETE FROM courses WHERE id = ?`).run(id)
+  const tx = db.transaction(() => {
+    db.prepare(`DELETE FROM courses WHERE id = ?`).run(id)
+    db.prepare(`DELETE FROM mastery WHERE scope_key LIKE ?`).run(`course:${id}:%`)
+    db.prepare(`DELETE FROM active_sessions WHERE id = ? OR course_id = ?`).run(`course:${id}`, id)
+  })
+  tx()
   return listCourses()
 }
 
@@ -500,17 +529,39 @@ export function saveMasteryMap(map) {
   return loadMastery()
 }
 
-export function recordMasteryOutcome(scopeKey, questionId, correct) {
+export function deleteMasteryForScope(scopeId) {
+  db.prepare(`DELETE FROM mastery WHERE scope_key LIKE ?`).run(`${scopeId}:%`)
+  return loadMastery()
+}
+
+export function recordMasteryOutcome(scopeKey, questionId, outcome) {
   const prev = db.prepare(`SELECT * FROM mastery WHERE scope_key = ?`).get(scopeKey)
   let correctCount = prev?.correct_count ?? 0
   let incorrectCount = prev?.incorrect_count ?? 0
   let intervalDays = prev?.interval_days ?? 1
   let easeFactor = prev?.ease_factor ?? 2.5
 
-  if (correct) {
+  // outcome: boolean (legacy), number quality, or 'again'|'hard'|'good'
+  let quality
+  if (typeof outcome === 'boolean') quality = outcome ? 4 : 1
+  else if (typeof outcome === 'string') {
+    quality = outcome === 'good' ? 4 : outcome === 'hard' ? 3 : 1
+  } else if (typeof outcome === 'number' && Number.isFinite(outcome)) {
+    quality = outcome
+  } else {
+    quality = 1
+  }
+
+  if (quality >= 3) {
     correctCount += 1
-    easeFactor = Math.max(1.3, easeFactor + 0.1)
-    intervalDays = Math.max(1, Math.round(intervalDays * easeFactor))
+    if (quality >= 4) {
+      easeFactor = Math.max(1.3, easeFactor + 0.1)
+      intervalDays = Math.max(1, Math.round(Math.max(intervalDays, 1) * easeFactor))
+    } else {
+      // hard
+      easeFactor = Math.max(1.3, easeFactor - 0.05)
+      intervalDays = Math.max(1, Math.round(Math.max(intervalDays, 1) * 1.2))
+    }
   } else {
     incorrectCount += 1
     easeFactor = Math.max(1.3, easeFactor - 0.2)

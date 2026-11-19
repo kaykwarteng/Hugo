@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useBusyAction } from '../hooks/useBusyAction'
 import type { UseAI } from '../hooks/useAI'
 import type { AIFormattingResult } from '../types/ai'
@@ -41,6 +41,8 @@ const SCHEMA_EXAMPLE = `[
 export function JsonUploader({ onLoad, ai }: JsonUploaderProps) {
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Parsing and building the quiz is synchronous but not instant on a big
   // bank, so the click yields a frame to the browser first.
@@ -49,6 +51,14 @@ export function JsonUploader({ onLoad, ai }: JsonUploaderProps) {
   // Set while an AI repair is showing, so it can be undone.
   const [repair, setRepair] = useState<AIFormattingResult | null>(null)
   const [preAiText, setPreAiText] = useState<string | null>(null)
+
+  const loadFile = async (file: File) => {
+    const content = await file.text()
+    setText(content)
+    setError(null)
+    setRepair(null)
+    setPreAiText(null)
+  }
 
   const aiReady = ai?.ready === true
   const repairingNow = ai?.active?.kind === 'json-repair'
@@ -109,6 +119,33 @@ export function JsonUploader({ onLoad, ai }: JsonUploaderProps) {
 
   return (
     <div className="space-y-4">
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragging(false)
+          const file = e.dataTransfer.files?.[0]
+          if (file) void loadFile(file)
+        }}
+        className={`rounded-xl border-2 border-dashed p-4 text-sm transition-colors ${dragging ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30' : 'border-slate-300 dark:border-slate-700'}`}
+      >
+        <p className="text-slate-600 dark:text-slate-400">
+          Drag and drop a <code>.json</code> file here, or{' '}
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">choose a file</button>.
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json,application/json,text/plain"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) void loadFile(file)
+            e.currentTarget.value = ''
+          }}
+        />
+      </div>
       <label htmlFor="quiz-json" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
         Paste your quiz JSON
       </label>

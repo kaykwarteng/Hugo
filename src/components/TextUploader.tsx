@@ -1,5 +1,5 @@
 import { MathText } from './MathText'
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useRef, useState } from 'react'
 import { useBusyAction } from '../hooks/useBusyAction'
 import type { UseAI } from '../hooks/useAI'
 import type { AIFormattingResult } from '../types/ai'
@@ -55,6 +55,8 @@ Which AWS service records configuration changes over time?
  */
 export function TextUploader({ onLoad, ai }: TextUploaderProps) {
   const [text, setText] = useState('')
+  const [dragging, setDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Building the quiz is synchronous but not instant on a big bank, so the
   // click yields a frame to the browser first and shows a spinner.
@@ -63,6 +65,13 @@ export function TextUploader({ onLoad, ai }: TextUploaderProps) {
   // Set while an AI reformat is showing, so it can be undone.
   const [formatting, setFormatting] = useState<AIFormattingResult | null>(null)
   const [preAiText, setPreAiText] = useState<string | null>(null)
+
+  const loadFile = async (file: File) => {
+    const content = await file.text()
+    setText(content)
+    setPreAiText(null)
+    setFormatting(null)
+  }
 
   // Defer parsing so fast typing never blocks the input.
   const deferredText = useDeferredValue(text)
@@ -118,6 +127,33 @@ export function TextUploader({ onLoad, ai }: TextUploaderProps) {
 
   return (
     <div className="space-y-4">
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragging(false)
+          const file = e.dataTransfer.files?.[0]
+          if (file) void loadFile(file)
+        }}
+        className={`rounded-xl border-2 border-dashed p-4 text-sm transition-colors ${dragging ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/30' : 'border-slate-300 dark:border-slate-700'}`}
+      >
+        <p className="text-slate-600 dark:text-slate-400">
+          Drag and drop a <code>.txt</code>/<code>.md</code> file here, or{' '}
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="font-medium text-indigo-600 hover:underline dark:text-indigo-400">choose a file</button>.
+        </p>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".txt,.md,.json,text/plain,application/json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) void loadFile(file)
+            e.currentTarget.value = ''
+          }}
+        />
+      </div>
       <label htmlFor="quiz-text" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
         Paste your questions as plain text
       </label>

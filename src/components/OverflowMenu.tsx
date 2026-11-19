@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { IconMoreVertical } from './icons/Icons'
 
 export interface MenuAction {
   label: string
@@ -9,6 +10,7 @@ export interface MenuAction {
   disabled?: boolean
   /** Explains a disabled item on hover. */
   title?: string
+  icon?: React.ReactNode
 }
 
 interface OverflowMenuProps {
@@ -142,13 +144,18 @@ export function OverflowMenu({ label, actions }: OverflowMenuProps) {
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => (open ? close() : setOpen(true))}
+        onClick={(event) => {
+          event.stopPropagation()
+          if (open) close()
+          else setOpen(true)
+        }}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-slate-300 bg-white text-lg leading-none text-slate-600 shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+        title="More actions"
+        className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:hover:bg-slate-800 dark:hover:text-slate-200"
       >
-        <span aria-hidden>⋮</span>
+        <IconMoreVertical size={16} />
       </button>
 
       {open &&
@@ -157,13 +164,15 @@ export function OverflowMenu({ label, actions }: OverflowMenuProps) {
             ref={menuRef}
             role="menu"
             aria-label={label}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
             style={
               placement === null
                 ? // First pass: laid out but not painted, purely to be measured.
                   { top: 0, left: 0, visibility: 'hidden' }
                 : { top: placement.top, left: placement.left, maxHeight: placement.maxHeight }
             }
-            className="fixed z-50 min-w-44 max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+            className="fixed z-[100] min-w-48 max-w-[calc(100vw-1rem)] overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
           >
             {actions.map((action) => (
               <button
@@ -172,17 +181,20 @@ export function OverflowMenu({ label, actions }: OverflowMenuProps) {
                 role="menuitem"
                 disabled={action.disabled}
                 title={action.title}
-                onClick={() => {
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
                   close()
                   action.onSelect()
                 }}
-                className={`block w-full px-4 py-2.5 text-left text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                   action.danger
                     ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/50'
                     : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
                 }`}
               >
-                {action.label}
+                {action.icon && <span className="shrink-0 text-current/80">{action.icon}</span>}
+                <span>{action.label}</span>
               </button>
             ))}
           </div>,

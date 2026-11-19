@@ -6,6 +6,7 @@ import { formatDateTime, formatRelativeDay } from '../utils/library'
 import { ConfirmDialog } from './ConfirmDialog'
 import type { MenuAction } from './OverflowMenu'
 import { OverflowMenu } from './OverflowMenu'
+import { IconBook, IconLibrary, IconTrash } from './icons/Icons'
 
 /** How long the "Saved to Quiz Library" confirmation stays up. */
 const FEEDBACK_MS = 5000
@@ -81,12 +82,13 @@ export function RecentResults({
    * visible instead of merely implied.
    */
   const buildActions = (attempt: QuizAttempt): MenuAction[] => {
-    const actions: MenuAction[] = [{ label: 'Review answers', onSelect: () => onReview(attempt) }]
+    const actions: MenuAction[] = [{ label: 'Review answers', icon: <IconBook size={14} />, onSelect: () => onReview(attempt) }]
 
     if (onSaveToLibrary !== undefined) {
       const saved = isInLibrary?.(attempt) ?? false
       actions.push({
         label: saved ? 'Already saved' : 'Save to Quiz Library',
+        icon: <IconLibrary size={14} />,
         onSelect: () => handleSave(attempt),
         disabled: saved,
         title: saved
@@ -95,7 +97,7 @@ export function RecentResults({
       })
     }
 
-    actions.push({ label: 'Delete', onSelect: () => setPendingDelete(attempt), danger: true })
+    actions.push({ label: 'Delete', icon: <IconTrash size={14} />, onSelect: () => setPendingDelete(attempt), danger: true })
     return actions
   }
 

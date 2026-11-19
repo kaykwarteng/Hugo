@@ -12,6 +12,13 @@ export interface QuizQuestion {
   explanation?: string
   category?: string
   difficulty?: string
+  /** Optional rich media (URL/external refs). */
+  imageUrl?: string
+  audioUrl?: string
+  /** User study metadata. */
+  flagged?: boolean
+  bookmarked?: boolean
+  note?: string
 }
 
 /** User-configurable options chosen on the setup screen. */
@@ -28,6 +35,8 @@ export interface QuizSettings {
    * always judged against the threshold it was taken under.
    */
   passPercentage: number
+  /** Max number of questions to include after filtering/shuffling. Omit or 0 for all. */
+  questionCount?: number
 }
 
 /** A running (or finished) quiz session — this is what gets persisted. */

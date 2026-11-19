@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Course, QuizSettings } from '../types/quiz'
 import { IconArrowLeft, IconPlay } from './icons/Icons'
+import { toCourseScopedQuestions } from '../utils/mastery'
 
 interface CourseQuizConfigProps {
   course: Course
@@ -39,7 +40,7 @@ export function CourseQuizConfig({
   const [passPercentage, setPassPercentage] = useState(60)
 
   const selectedChapters = chapters.filter((ch) => selected.has(ch.id))
-  const availableQuestions = selectedChapters.flatMap((ch) => ch.questions)
+  const availableQuestions = selectedChapters.flatMap((ch) => toCourseScopedQuestions(ch.id, ch.questions))
   const availableCount = availableQuestions.length
 
   const selectableChapters = chapters.filter((ch) => ch.questions.length > 0)
@@ -68,36 +69,15 @@ export function CourseQuizConfig({
 
   const handleStart = () => {
     if (!canStart) return
-    let pool = [...availableQuestions]
-    if (shuffleQuestions) {
-      // Fisher-Yates
-      for (let i = pool.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1))
-        ;[pool[i], pool[j]] = [pool[j], pool[i]]
-      }
-    }
-    if (effectiveCount < pool.length) {
-      pool = pool.slice(0, effectiveCount)
-    }
     const settings: QuizSettings = {
-      shuffleQuestions: false, // already applied
+      shuffleQuestions,
       shuffleOptions,
       timerMinutes: timerEnabled ? Math.max(1, Number(timerMinutes) || 30) : 0,
       categories: [],
       passPercentage: Math.min(100, Math.max(0, Number(passPercentage) || 60)),
+      questionCount: effectiveCount < availableCount ? effectiveCount : undefined,
     }
-    // If shuffleOptions, apply now so the session is fixed
-    if (shuffleOptions) {
-      pool = pool.map((q) => {
-        const opts = [...q.options]
-        for (let i = opts.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1))
-          ;[opts[i], opts[j]] = [opts[j], opts[i]]
-        }
-        return { ...q, options: opts }
-      })
-    }
-    onStart(pool, settings, {
+    onStart([...availableQuestions], settings, {
       courseId: course.id,
       courseName: course.name,
       chapterIds: selectedChapters.map((ch) => ch.id),

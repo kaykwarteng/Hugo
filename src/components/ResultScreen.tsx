@@ -18,6 +18,8 @@ interface ResultScreenProps {
   session: QuizSession
   /** Omitted when reviewing a stored attempt, where there's nothing to retry. */
   onRetry?: () => void
+  /** Start a new run containing only incorrect/unanswered questions. */
+  onRetryIncorrect?: () => void
   onNewQuiz: () => void
   /** Label for the "leave this screen" action — "Back to history" in review mode. */
   newQuizLabel?: string
@@ -59,6 +61,7 @@ function exportQuiz(session: QuizSession) {
 export function ResultScreen({
   session,
   onRetry,
+  onRetryIncorrect,
   onNewQuiz,
   newQuizLabel = 'Create Quiz',
   onViewHistory,
@@ -69,6 +72,7 @@ export function ResultScreen({
   celebrateOnPass = false,
 }: ResultScreenProps) {
   const result = useMemo(() => computeResult(session), [session])
+  const incorrectCount = result.incorrect + result.unanswered
   const [incorrectOnly, setIncorrectOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [confirmRetry, setConfirmRetry] = useState(false)
@@ -206,6 +210,11 @@ export function ResultScreen({
                 Retry quiz
               </button>
             )}
+            {onRetryIncorrect !== undefined && incorrectCount > 0 && (
+              <button type="button" onClick={onRetryIncorrect} className={secondary}>
+                Practice incorrect only ({incorrectCount})
+              </button>
+            )}
             {onLibrary !== undefined && (
               <button type="button" onClick={onLibrary} className={secondary}>
                 Back to Quiz Library
@@ -301,9 +310,13 @@ export function ResultScreen({
               className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
             >
               <div className="mb-3 flex items-start justify-between gap-3">
-                <p className="font-medium leading-snug">
-                  <MathText>{q.question}</MathText>
-                </p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium leading-snug">
+                    <MathText>{q.question}</MathText>
+                  </p>
+                  {q.imageUrl && <img src={q.imageUrl} alt="" className="mt-3 max-h-64 rounded-lg border border-slate-200 object-contain dark:border-slate-800" loading="lazy" />}
+                  {q.audioUrl && <audio controls src={q.audioUrl} className="mt-3 w-full" />}
+                </div>
                 <span
                   aria-label={isCorrect ? 'Correct' : answer === undefined ? 'Skipped' : 'Incorrect'}
                   className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${
@@ -363,6 +376,7 @@ export function ResultScreen({
               </div>
 
               <ExplanationPanel explanation={q.explanation} />
+              {q.note && <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300"><strong>Note:</strong> {q.note}</p>}
               {renderQuestionExtras?.(q, answer)}
             </div>
           )

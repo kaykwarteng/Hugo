@@ -92,9 +92,13 @@ export function QuizCard({
         )}
       </div>
 
-      <h2 className="mb-6 text-lg font-semibold leading-snug sm:text-xl">
+      <h2 className="mb-4 text-lg font-semibold leading-snug sm:text-xl">
         <MathText as="span">{question.question}</MathText>
       </h2>
+      {question.imageUrl && (
+        <img src={question.imageUrl} alt="" className="mb-4 max-h-80 w-full rounded-xl border border-slate-200 object-contain dark:border-slate-800" loading="lazy" />
+      )}
+      {question.audioUrl && <audio controls src={question.audioUrl} className="mb-4 w-full" />}
 
       <div
         role={multi ? 'group' : 'radiogroup'}

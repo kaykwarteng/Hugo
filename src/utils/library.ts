@@ -60,6 +60,9 @@ export function buildSession(
     : [...bank]
 
   if (settings.shuffleQuestions) questions = shuffle(questions)
+  if (settings.questionCount && settings.questionCount > 0) {
+    questions = questions.slice(0, settings.questionCount)
+  }
   if (settings.shuffleOptions) {
     questions = questions.map((q) => ({ ...q, options: shuffle(q.options) }))
   }

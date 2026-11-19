@@ -29,6 +29,11 @@ export function QuestionFormModal({ initial, onSave, onCancel, nextId = 1 }: Que
   const [explanation, setExplanation] = useState(initial?.explanation ?? '')
   const [difficulty, setDifficulty] = useState(initial?.difficulty ?? '')
   const [category, setCategory] = useState(initial?.category ?? '')
+  const [imageUrl, setImageUrl] = useState(initial?.imageUrl ?? '')
+  const [audioUrl, setAudioUrl] = useState(initial?.audioUrl ?? '')
+  const [note, setNote] = useState(initial?.note ?? '')
+  const [flagged, setFlagged] = useState(initial?.flagged === true)
+  const [bookmarked, setBookmarked] = useState(initial?.bookmarked === true)
   const [error, setError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
 
@@ -111,6 +116,11 @@ export function QuestionFormModal({ initial, onSave, onCancel, nextId = 1 }: Que
       explanation: explanation.trim() || undefined,
       difficulty: difficulty.trim() || undefined,
       category: category.trim() || undefined,
+      imageUrl: imageUrl.trim() || undefined,
+      audioUrl: audioUrl.trim() || undefined,
+      note: note.trim() || undefined,
+      flagged: flagged || undefined,
+      bookmarked: bookmarked || undefined,
     }
     onSave(question)
   }
@@ -212,22 +222,33 @@ export function QuestionFormModal({ initial, onSave, onCancel, nextId = 1 }: Que
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="mb-1 block text-sm font-medium">Difficulty</label>
-            <input
-              value={difficulty}
-              onChange={(e) => setDifficulty(e.target.value)}
-              placeholder="e.g. medium"
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
-            />
+            <input value={difficulty} onChange={(e) => setDifficulty(e.target.value)} placeholder="e.g. medium" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium">Category / tag</label>
-            <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              placeholder="optional"
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
-            />
+            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="optional" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium">Image URL (optional)</label>
+            <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium">Audio URL (optional)</label>
+            <input value={audioUrl} onChange={(e) => setAudioUrl(e.target.value)} placeholder="https://..." className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">Personal note (optional)</label>
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Your note for this question" className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950" />
+        </div>
+
+        <div className="flex flex-wrap gap-4">
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={flagged} onChange={(e) => setFlagged(e.target.checked)} className="size-4 rounded border-slate-300 text-indigo-600" />Flagged</label>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={bookmarked} onChange={(e) => setBookmarked(e.target.checked)} className="size-4 rounded border-slate-300 text-indigo-600" />Bookmarked</label>
         </div>
 
         <div>
@@ -256,11 +277,14 @@ export function QuestionFormModal({ initial, onSave, onCancel, nextId = 1 }: Que
                   </li>
                 ))}
               </ul>
+              {imageUrl.trim() && <img src={imageUrl.trim()} alt="" className="mt-3 max-h-48 rounded-lg border border-slate-200 object-contain dark:border-slate-800" />}
+              {audioUrl.trim() && <audio controls src={audioUrl.trim()} className="mt-3 w-full" />}
               {explanation.trim() && (
                 <div className="mt-3 border-t border-slate-200 pt-2 text-slate-600 dark:border-slate-800 dark:text-slate-400">
                   <MathText as="div">{explanation}</MathText>
                 </div>
               )}
+              {note.trim() && <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">Note: {note.trim()}</p>}
             </div>
           )}
         </div>

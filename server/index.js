@@ -28,6 +28,7 @@ import {
   loadMastery,
   recordMasteryOutcome,
   saveMasteryMap,
+  deleteMasteryForScope,
   setAppState,
   upsertActiveSession,
   upsertCourse,
@@ -198,11 +199,19 @@ app.put('/api/mastery', (req, res) => {
 })
 
 app.post('/api/mastery/record', (req, res) => {
-  const { scopeKey, questionId, correct } = req.body || {}
-  if (!scopeKey || typeof questionId !== 'number' || typeof correct !== 'boolean') {
-    return res.status(400).json({ error: 'scopeKey, questionId, correct required' })
+  const { scopeKey, questionId, correct, quality } = req.body || {}
+  if (!scopeKey || typeof questionId !== 'number') {
+    return res.status(400).json({ error: 'scopeKey and questionId required' })
   }
-  res.json(recordMasteryOutcome(scopeKey, questionId, correct))
+  const outcome = quality !== undefined ? quality : correct
+  if (outcome === undefined) return res.status(400).json({ error: 'correct or quality required' })
+  res.json(recordMasteryOutcome(scopeKey, questionId, outcome))
+})
+
+app.delete('/api/mastery/scope/:scopeId', (req, res) => {
+  const scopeId = decodeURIComponent(req.params.scopeId)
+  if (!scopeId) return res.status(400).json({ error: 'scopeId required' })
+  res.json(deleteMasteryForScope(scopeId))
 })
 
 

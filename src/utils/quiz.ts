@@ -30,9 +30,23 @@ export interface LegacyQuizQuestion extends Omit<QuizQuestion, 'correctAnswers'>
  */
 export function normalizeQuestion(raw: LegacyQuizQuestion): QuizQuestion {
   const { correctAnswer, correctAnswers, ...rest } = raw
+  const r = rest as Record<string, unknown>
+  const imageUrl = typeof r.imageUrl === 'string' && r.imageUrl ? r.imageUrl : undefined
+  const audioUrl = typeof r.audioUrl === 'string' && r.audioUrl ? r.audioUrl : undefined
+  const note = typeof r.note === 'string' && r.note ? r.note : undefined
   return {
-    ...rest,
+    id: raw.id,
+    question: raw.question,
+    options: raw.options,
     correctAnswers: correctAnswers ?? (correctAnswer === undefined ? [] : [correctAnswer]),
+    explanation: raw.explanation,
+    category: raw.category,
+    difficulty: raw.difficulty,
+    imageUrl,
+    audioUrl,
+    flagged: r.flagged === true || undefined,
+    bookmarked: r.bookmarked === true || undefined,
+    note,
   }
 }
 
@@ -163,13 +177,22 @@ export function parseQuizJson(
         error: `${label}: "correctAnswers" is required — an array of the options that are correct (a single "correctAnswer" string also works).`,
       }
     }
+    const qRec = q as Record<string, unknown>
     for (const [key, type] of [
       ['explanation', 'string'],
       ['category', 'string'],
       ['difficulty', 'string'],
+      ['imageUrl', 'string'],
+      ['audioUrl', 'string'],
+      ['note', 'string'],
     ] as const) {
-      if (q[key] !== undefined && typeof q[key] !== type) {
+      if (qRec[key] !== undefined && typeof qRec[key] !== type) {
         return { ok: false, error: `${label}: "${key}" must be a string when provided.` }
+      }
+    }
+    for (const key of ['flagged', 'bookmarked'] as const) {
+      if (qRec[key] !== undefined && typeof qRec[key] !== 'boolean') {
+        return { ok: false, error: `${label}: "${key}" must be a boolean when provided.` }
       }
     }
   }

@@ -100,6 +100,23 @@ export function IconChevronDown(props: IconProps) {
   )
 }
 
+export function IconChevronUp(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <path d="m18 15-6-6-6 6" />
+    </svg>
+  )
+}
+
+export function IconCopy(props: IconProps) {
+  return (
+    <svg {...baseProps(props)}>
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </svg>
+  )
+}
+
 export function IconSearch(props: IconProps) {
   return (
     <svg {...baseProps(props)}>

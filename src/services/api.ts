@@ -112,12 +112,16 @@ export async function apiSaveMastery(
 export async function apiRecordMastery(
   scopeKey: string,
   questionId: number,
-  correct: boolean,
+  outcome: boolean | number | 'again' | 'hard' | 'good',
 ): Promise<QuestionMastery> {
-  return request('/mastery/record', {
-    method: 'POST',
-    body: JSON.stringify({ scopeKey, questionId, correct }),
-  })
+  const body: Record<string, unknown> = { scopeKey, questionId }
+  if (typeof outcome === 'boolean') body.correct = outcome
+  else body.quality = outcome
+  return request('/mastery/record', { method: 'POST', body: JSON.stringify(body) })
+}
+
+export async function apiClearMasteryScope(scopeId: string): Promise<Record<string, QuestionMastery>> {
+  return request(`/mastery/scope/${encodeURIComponent(scopeId)}`, { method: 'DELETE' })
 }
 
 export interface ActiveSessionRecord {

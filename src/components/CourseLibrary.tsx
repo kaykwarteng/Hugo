@@ -1,15 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Chapter, Course, HistoryStats, QuizQuestion, QuizSettings } from '../types/quiz'
 import type { ActiveSessionRecord } from '../services/api'
 import { ChapterDetail } from './ChapterDetail'
 import { ConfirmDialog } from './ConfirmDialog'
 import { CourseQuizConfig } from './CourseQuizConfig'
 import {
+  IconChart,
   IconChevronRight,
   IconEdit,
   IconFileQuestion,
   IconFolder,
   IconFolderOpen,
+  IconGraduationCap,
   IconLayers,
   IconMoreVertical,
   IconPlay,
@@ -27,9 +30,7 @@ interface CourseLibraryProps {
   onAddChapter: (courseId: string, title: string, description?: string) => Chapter | null | Promise<Chapter | null>
   onRenameChapter: (courseId: string, chapterId: string, title: string, description?: string) => void
   onRemoveChapter: (courseId: string, chapterId: string) => void
-  onAddQuestionsToChapter: (courseId: string, chapterId: string, questions: QuizQuestion[]) => void
-  onUpdateQuestion: (courseId: string, chapterId: string, question: QuizQuestion) => void
-  onDeleteQuestion: (courseId: string, chapterId: string, questionId: number) => void
+  onSetChapterQuestions: (courseId: string, chapterId: string, questions: QuizQuestion[]) => void
   onMoveQuestion: (
     fromCourseId: string,
     fromChapterId: string,
@@ -50,6 +51,12 @@ interface CourseLibraryProps {
   onDiscardSession?: (id: string) => void
   /** Attempt stats for a course (keyed by course id). */
   statsForCourse?: (courseId: string) => HistoryStats
+  onViewCourseResults?: (courseScopeId: string) => void
+  isMasteryEnabled?: (scopeId: string) => boolean
+  onToggleMastery?: (scopeId: string, enabled: boolean) => void
+  /** When set, opens quiz config for this course (then cleared by consumer). */
+  openQuizConfigCourseId?: string | null
+  onOpenQuizConfigConsumed?: () => void
   standaloneSlot?: React.ReactNode
 }
 
@@ -115,9 +122,7 @@ export function CourseLibrary({
   onAddChapter,
   onRenameChapter,
   onRemoveChapter,
-  onAddQuestionsToChapter,
-  onUpdateQuestion,
-  onDeleteQuestion,
+  onSetChapterQuestions,
   onMoveQuestion,
   nextQuestionId,
   onStartQuiz,
@@ -126,6 +131,11 @@ export function CourseLibrary({
   onResumeSession,
   onDiscardSession,
   statsForCourse,
+  onViewCourseResults,
+  isMasteryEnabled,
+  onToggleMastery,
+  openQuizConfigCourseId,
+  onOpenQuizConfigConsumed,
   standaloneSlot,
 }: CourseLibraryProps) {
   const [view, setView] = useState<SubView>({ kind: 'list' })
@@ -251,6 +261,14 @@ export function CourseLibrary({
     navigate({ kind: 'course', courseId })
   }
 
+  useEffect(() => {
+    if (!openQuizConfigCourseId) return
+    if (findCourse(openQuizConfigCourseId)) {
+      navigate({ kind: 'quiz-config', courseId: openQuizConfigCourseId })
+    }
+    onOpenQuizConfigConsumed?.()
+  }, [openQuizConfigCourseId, onOpenQuizConfigConsumed, findCourse, navigate])
+
   // ---- Quiz configuration ----
   if (view.kind === 'quiz-config') {
     const course = findCourse(view.courseId)
@@ -320,10 +338,7 @@ export function CourseLibrary({
               initialChapterIds: [chapter.id],
             })
           }
-          onAddQuestion={(question) => onAddQuestionsToChapter(course.id, chapter.id, [question])}
-          onAddQuestions={(questions) => onAddQuestionsToChapter(course.id, chapter.id, questions)}
-          onUpdateQuestion={(question) => onUpdateQuestion(course.id, chapter.id, question)}
-          onDeleteQuestion={(questionId) => onDeleteQuestion(course.id, chapter.id, questionId)}
+          onSetQuestions={(questions) => onSetChapterQuestions(course.id, chapter.id, questions)}
           onMoveQuestion={(questionId, toCourseId, toChapterId) =>
             onMoveQuestion(course.id, chapter.id, toCourseId, toChapterId, questionId)
           }
@@ -368,7 +383,7 @@ export function CourseLibrary({
               {plural(course.chapters.length, 'Chapter')} · {plural(questionCount, 'Question')}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => {
@@ -395,6 +410,20 @@ export function CourseLibrary({
               <IconPlay size={16} />
               Start Quiz
             </button>
+            {(() => {
+              const scopeId = `course:${course.id}`
+              const enabled = isMasteryEnabled?.(scopeId) ?? false
+              const menuItems: CardMenuItem[] = []
+              if (onViewCourseResults) {
+                menuItems.push({ label: 'View results', icon: <IconChart size={14} />, onClick: () => onViewCourseResults(scopeId) })
+              }
+              if (onToggleMastery) {
+                menuItems.push({ label: enabled ? 'Disable mastery mode' : 'Enable mastery mode', icon: <IconGraduationCap size={14} />, onClick: () => onToggleMastery(scopeId, !enabled) })
+              }
+              menuItems.push({ label: 'Edit course', icon: <IconEdit size={14} />, onClick: () => setEditingCourse(course) })
+              menuItems.push({ label: 'Delete course', icon: <IconTrash size={14} />, danger: true, onClick: () => setConfirmDelete({ type: 'course', course }) })
+              return <CardMenu label={`Actions for ${course.name}`} items={menuItems} />
+            })()}
           </div>
         </div>
 
@@ -860,11 +889,27 @@ export function CourseLibrary({
                 navigate({ kind: 'course', courseId: course.id })
               },
             })
+            if (onViewCourseResults) {
+              menuItems.push({
+                label: 'View results',
+                icon: <IconChart size={14} />,
+                onClick: () => onViewCourseResults(`course:${course.id}`),
+              })
+            }
             menuItems.push({
               label: 'Edit course',
               icon: <IconEdit size={14} />,
               onClick: () => setEditingCourse(course),
             })
+            if (onToggleMastery) {
+              const scopeId = `course:${course.id}`
+              const enabled = isMasteryEnabled?.(scopeId) ?? false
+              menuItems.push({
+                label: enabled ? 'Disable mastery mode' : 'Enable mastery mode',
+                icon: <IconGraduationCap size={14} />,
+                onClick: () => onToggleMastery(scopeId, !enabled),
+              })
+            }
             if (active && onDiscardSession) {
               menuItems.push({
                 label: 'Discard in-progress quiz',
@@ -934,6 +979,11 @@ export function CourseLibrary({
                   <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLASS[status]}`}>
                     {STATUS_LABEL[status]}
                   </span>
+                  {isMasteryEnabled?.(`course:${course.id}`) && (
+                    <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                      Mastery
+                    </span>
+                  )}
                   {active && progress && (
                     <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
                       {progress.percent}% · {progress.answered}/{progress.total} answered
@@ -1150,33 +1200,88 @@ function LibraryToolbar({
 
 function CardMenu({ label, items }: { label: string; items: CardMenuItem[] }) {
   const [open, setOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const [placement, setPlacement] = useState<{ top: number; left: number; maxHeight: number } | null>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const naturalHeightRef = useRef(0)
+
+  const close = useCallback((refocus = false) => {
+    setOpen(false)
+    setPlacement(null)
+    naturalHeightRef.current = 0
+    if (refocus) triggerRef.current?.focus()
+  }, [])
+
+  const reposition = useCallback(() => {
+    const trigger = triggerRef.current
+    const menu = menuRef.current
+    if (!trigger || !menu) return
+    const anchor = trigger.getBoundingClientRect()
+    const rect = menu.getBoundingClientRect()
+    if (naturalHeightRef.current === 0) naturalHeightRef.current = rect.height
+    const height = naturalHeightRef.current
+    const width = rect.width
+    const viewportH = window.innerHeight
+    const viewportW = window.innerWidth
+    const GAP = 4
+    const EDGE = 8
+    const spaceBelow = viewportH - anchor.bottom - GAP - EDGE
+    const spaceAbove = anchor.top - GAP - EDGE
+    const openUp = height > spaceBelow && spaceAbove > spaceBelow
+    const maxHeight = Math.max(96, openUp ? spaceAbove : spaceBelow)
+    const shownHeight = Math.min(height, maxHeight)
+    const top = openUp ? Math.max(EDGE, anchor.top - GAP - shownHeight) : anchor.bottom + GAP
+    const left = Math.min(
+      Math.max(EDGE, anchor.right - width),
+      Math.max(EDGE, viewportW - width - EDGE),
+    )
+    setPlacement((prev) =>
+      prev && prev.top === top && prev.left === left && prev.maxHeight === maxHeight
+        ? prev
+        : { top, left, maxHeight },
+    )
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    reposition()
+  }, [open, reposition])
 
   useEffect(() => {
     if (!open) return
-    const handlePointer = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.stopPropagation()
+      close(true)
     }
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (triggerRef.current?.contains(target)) return
+      if (menuRef.current?.contains(target)) return
+      close()
     }
-    document.addEventListener('mousedown', handlePointer)
-    document.addEventListener('keydown', handleKey)
+    const onReflow = () => reposition()
+    window.addEventListener('keydown', onKeyDown, true)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    window.addEventListener('scroll', onReflow, true)
+    window.addEventListener('resize', onReflow)
     return () => {
-      document.removeEventListener('mousedown', handlePointer)
-      document.removeEventListener('keydown', handleKey)
+      window.removeEventListener('keydown', onKeyDown, true)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+      window.removeEventListener('scroll', onReflow, true)
+      window.removeEventListener('resize', onReflow)
     }
-  }, [open])
+  }, [open, close, reposition])
 
   return (
-    <div ref={containerRef} className="relative">
+    <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={(event) => {
           event.stopPropagation()
-          setOpen((value) => !value)
+          if (open) close()
+          else setOpen(true)
         }}
         aria-label={label}
         aria-haspopup="menu"
@@ -1186,34 +1291,46 @@ function CardMenu({ label, items }: { label: string; items: CardMenuItem[] }) {
       >
         <IconMoreVertical size={16} />
       </button>
-      {open && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-30 mt-1 w-48 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
-        >
-          {items.map((item) => (
-            <button
-              key={item.label}
-              type="button"
-              role="menuitem"
-              onClick={(event) => {
-                event.stopPropagation()
-                setOpen(false)
-                item.onClick()
-              }}
-              className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
-                item.danger
-                  ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40'
-                  : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
-              }`}
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            role="menu"
+            aria-label={label}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            style={
+              placement === null
+                ? { top: 0, left: 0, visibility: 'hidden' }
+                : { top: placement.top, left: placement.left, maxHeight: placement.maxHeight }
+            }
+            className="fixed z-[100] w-52 overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+          >
+            {items.map((item) => (
+              <button
+                key={item.label}
+                type="button"
+                role="menuitem"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  close()
+                  item.onClick()
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
+                  item.danger
+                    ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40'
+                    : 'text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800'
+                }`}
+              >
+                {item.icon}
+                {item.label}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }
 
