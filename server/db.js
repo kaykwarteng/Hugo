@@ -423,22 +423,28 @@ export function listAttempts() {
   const rows = db
     .prepare(`SELECT * FROM attempts ORDER BY completed_at DESC`)
     .all()
-  return rows.map((r) => ({
-    id: r.id,
-    quizId: r.quiz_id || undefined,
-    quizName: r.quiz_name,
-    startedAt: r.started_at,
-    completedAt: r.completed_at,
-    timeTakenSeconds: r.time_taken_sec,
-    correct: r.correct,
-    incorrect: r.incorrect,
-    unanswered: r.unanswered,
-    total: r.total,
-    percentage: r.percentage,
-    settings: parseJson(r.settings_json, {}),
-    questions: parseJson(r.questions_json, []),
-    answers: parseJson(r.answers_json, {}),
-  }))
+  return rows.map((r) => {
+    const settings = parseJson(r.settings_json, {})
+    const incorrectOnly = settings?.incorrectOnly === true || undefined
+    if (settings && 'incorrectOnly' in settings) delete settings.incorrectOnly
+    return {
+      id: r.id,
+      quizId: r.quiz_id || undefined,
+      quizName: r.quiz_name,
+      startedAt: r.started_at,
+      completedAt: r.completed_at,
+      timeTakenSeconds: r.time_taken_sec,
+      correct: r.correct,
+      incorrect: r.incorrect,
+      unanswered: r.unanswered,
+      total: r.total,
+      percentage: r.percentage,
+      settings,
+      questions: parseJson(r.questions_json, []),
+      answers: parseJson(r.answers_json, {}),
+      incorrectOnly,
+    }
+  })
 }
 
 export function appendAttempt(attempt) {
@@ -464,7 +470,7 @@ export function appendAttempt(attempt) {
     unanswered: attempt.unanswered,
     total: attempt.total,
     percentage: attempt.percentage,
-    settingsJson: JSON.stringify(attempt.settings ?? {}),
+    settingsJson: JSON.stringify({ ...(attempt.settings ?? {}), ...(attempt.incorrectOnly ? { incorrectOnly: true } : {}) }),
     questionsJson: JSON.stringify(attempt.questions ?? []),
     answersJson: JSON.stringify(attempt.answers ?? {}),
   })

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { QuizAttempt, QuizSettings } from '../types/quiz'
-import { computeHistoryStats, formatDateTime } from '../utils/library'
+import { computeHistoryStats, formatDateTime, isIncorrectOnlyAttempt, splitQuizLabel } from '../utils/library'
 import { formatTime } from '../utils/quiz'
 import { ConfirmDialog } from './ConfirmDialog'
 
@@ -39,6 +39,7 @@ export function QuizHistory({
 }: QuizHistoryProps) {
   const [pendingDelete, setPendingDelete] = useState<QuizAttempt | null>(null)
   const stats = computeHistoryStats(attempts)
+  const displayQuizName = splitQuizLabel(quiz.name).primary
 
   const summary: { label: string; value: string }[] = [
     { label: 'Latest', value: stats.latest === null ? '—' : `${stats.latest}%` },
@@ -58,7 +59,7 @@ export function QuizHistory({
           >
             ← Back to {backLabel}
           </button>
-          <h2 className="mt-1 break-words text-xl font-bold tracking-tight">{quiz.name}</h2>
+          <h2 className="mt-1 break-words text-xl font-bold tracking-tight">{displayQuizName}</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">Results</p>
         </div>
         <button
@@ -99,12 +100,19 @@ export function QuizHistory({
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="font-semibold">
-                    <span className="text-indigo-600 dark:text-indigo-400">{attempt.percentage}%</span>{' '}
-                    <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
-                      {attempt.correct}/{attempt.total} correct
-                    </span>
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold">
+                      <span className="text-indigo-600 dark:text-indigo-400">{attempt.percentage}%</span>{' '}
+                      <span className="text-sm font-normal text-slate-600 dark:text-slate-400">
+                        {attempt.correct}/{attempt.total} correct
+                      </span>
+                    </p>
+                    {isIncorrectOnlyAttempt(attempt) && (
+                      <span className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        Incorrect only
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-0.5 break-words text-sm text-slate-500 dark:text-slate-400">
                     {formatDateTime(attempt.completedAt)} · took {formatTime(attempt.timeTakenSeconds)}
                   </p>

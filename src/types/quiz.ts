@@ -88,6 +88,8 @@ export interface QuizSession {
   quizId?: string
   /** Denormalised saved-quiz name, so results read well even after a rename. */
   quizName?: string
+  /** Practice run containing only incorrect/unanswered questions from a prior attempt. */
+  incorrectOnly?: boolean
   /** Epoch ms when the quiz was submitted. Only set once finished. */
   finishedAt?: number
 }
@@ -107,6 +109,8 @@ export interface SavedQuizProgress {
   startedAt: number
   timerMinutes: number
   settings: QuizSettings
+  /** Practice run containing only incorrect/unanswered questions. */
+  incorrectOnly?: boolean
   /** Epoch ms of the last change, for "last active" display. */
   updatedAt: number
 }
@@ -150,6 +154,8 @@ export interface QuizAttempt {
   questions: QuizQuestion[]
   /** Map of question id -> selected options. Unsubmitted drafts are dropped. */
   answers: Record<number, string[]>
+  /** Practice run containing only incorrect/unanswered questions. */
+  incorrectOnly?: boolean
 }
 
 /** Aggregate stats across a quiz's attempts. */

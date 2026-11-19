@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { playSound } from '../services/sound'
 import type { QuizQuestion, QuizSession } from '../types/quiz'
-import { splitQuizLabel } from '../utils/library'
+import { isIncorrectOnlyAttempt, splitQuizLabel } from '../utils/library'
 import { computeResult, getOptionKey, getOptionMedia, getOptionText, isAnswerCorrect, isMultiAnswer } from '../utils/quiz'
 import { CelebrationOverlay } from './CelebrationOverlay'
 import { MathText } from './MathText'
@@ -115,7 +115,10 @@ export function ResultScreen({
   const reviewQuestions = session.questions.filter((q) => {
     if (incorrectOnly && isAnswerCorrect(q, session.answers[q.id])) return false
     if (search.trim() !== '') {
-      const haystack = `${q.question} ${q.options.join(' ')} ${q.category ?? ''}`.toLowerCase()
+      const optionText = q.options
+        .map((o, i) => (typeof o === 'string' ? o : (o.text ?? o.imageUrl ?? o.audioUrl ?? `option-${i + 1}`)))
+        .join(' ')
+      const haystack = `${q.question} ${optionText} ${q.category ?? ''}`.toLowerCase()
       if (!haystack.includes(search.trim().toLowerCase())) return false
     }
     return true
@@ -132,6 +135,7 @@ export function ResultScreen({
   const secondary =
     'min-h-11 rounded-xl border border-slate-300 bg-white px-5 py-2.5 font-medium shadow-sm transition-colors hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800'
 
+  const incorrectOnlyAttempt = isIncorrectOnlyAttempt({ quizName: session.quizName ?? '', incorrectOnly: session.incorrectOnly })
   const quizLabel = session.quizName ? splitQuizLabel(session.quizName) : null
 
   return (
@@ -155,10 +159,19 @@ export function ResultScreen({
                 <p className="max-w-2xl break-words text-sm font-medium text-slate-800 dark:text-slate-100 sm:text-base">
                   {quizLabel.primary}
                 </p>
-                {quizLabel.secondary && (
-                  <span className="inline-flex max-w-full rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    <span className="truncate">{quizLabel.secondary}</span>
-                  </span>
+                {(quizLabel.secondary || incorrectOnlyAttempt) && (
+                  <div className="flex flex-wrap items-center justify-center gap-1.5">
+                    {quizLabel.secondary && (
+                      <span className="inline-flex max-w-full rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        <span className="truncate">{quizLabel.secondary}</span>
+                      </span>
+                    )}
+                    {incorrectOnlyAttempt && (
+                      <span className="inline-flex rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                        Incorrect only
+                      </span>
+                    )}
+                  </div>
                 )}
               </>
             )}

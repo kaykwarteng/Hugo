@@ -55,6 +55,7 @@ import { computeResult, shuffle } from './quiz'
 interface BuildSessionOptions {
   quizId?: string
   quizName?: string
+  incorrectOnly?: boolean
 }
 
 /**
@@ -91,6 +92,7 @@ export function buildSession(
     settings,
     quizId: options.quizId,
     quizName: options.quizName,
+    incorrectOnly: options.incorrectOnly || undefined,
   }
 }
 
@@ -106,6 +108,7 @@ export function sessionToProgress(session: QuizSession): SavedQuizProgress {
     startedAt: session.startedAt,
     timerMinutes: session.timerMinutes,
     settings: session.settings,
+    incorrectOnly: session.incorrectOnly || undefined,
     updatedAt: Date.now(),
   }
 }
@@ -127,6 +130,7 @@ export function progressToSession(quiz: SavedQuiz, progress: SavedQuizProgress):
     settings: progress.settings,
     quizId: quiz.id,
     quizName: quiz.name,
+    incorrectOnly: progress.incorrectOnly || undefined,
   }
 }
 
@@ -148,6 +152,7 @@ export function sessionToAttempt(session: QuizSession, completedAt = Date.now())
     settings: session.settings,
     questions: session.questions,
     answers: session.answers,
+    incorrectOnly: session.incorrectOnly || undefined,
   }
 }
 
@@ -172,17 +177,36 @@ export function attemptToSession(attempt: QuizAttempt): QuizSession {
     settings: attempt.settings,
     quizId: attempt.quizId,
     quizName: attempt.quizName,
+    incorrectOnly: attempt.incorrectOnly || undefined,
     finishedAt: attempt.completedAt,
   }
 }
 
+const INCORRECT_ONLY_RE = /\s*\(incorrect only\)\s*/gi
+
+export function stripIncorrectOnlyTag(name: string): { name: string; incorrectOnly: boolean } {
+  const incorrectOnly = INCORRECT_ONLY_RE.test(name)
+  INCORRECT_ONLY_RE.lastIndex = 0
+  const cleaned = name.replace(INCORRECT_ONLY_RE, ' ').replace(/\s{2,}/g, ' ').trim()
+  return { name: cleaned || name.trim() || 'Quiz', incorrectOnly }
+}
+
+export function displayQuizName(name: string): string {
+  return stripIncorrectOnlyTag(name).name
+}
+
+export function isIncorrectOnlyAttempt(attempt: { quizName: string; incorrectOnly?: boolean }): boolean {
+  return attempt.incorrectOnly === true || stripIncorrectOnlyTag(attempt.quizName).incorrectOnly
+}
+
 /** Split a quiz/run label like "Course · Chapter 1, Chapter 2" into balanced display parts. */
 export function splitQuizLabel(name: string): { primary: string; secondary?: string } {
+  const cleaned = stripIncorrectOnlyTag(name).name
   const sep = ' · '
-  const i = name.indexOf(sep)
-  if (i === -1) return { primary: name.trim() || 'Quiz' }
-  const primary = name.slice(0, i).trim() || 'Quiz'
-  const rest = name.slice(i + sep.length).trim()
+  const i = cleaned.indexOf(sep)
+  if (i === -1) return { primary: cleaned.trim() || 'Quiz' }
+  const primary = cleaned.slice(0, i).trim() || 'Quiz'
+  const rest = cleaned.slice(i + sep.length).trim()
   if (!rest) return { primary }
 
   if (/^all chapters$/i.test(rest) || /^\d+\s+chapters$/i.test(rest)) {

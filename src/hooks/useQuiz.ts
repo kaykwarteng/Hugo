@@ -7,6 +7,7 @@ import { isMultiAnswer, toggleOption } from '../utils/quiz'
 interface StartOptions {
   quizId?: string
   quizName?: string
+  incorrectOnly?: boolean
 }
 
 export function useQuiz() {

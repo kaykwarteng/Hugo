@@ -135,6 +135,7 @@ export function normalizeSession(value: unknown): QuizSession | null {
     settings: { ...settings, timerMinutes: settings.timerMinutes || timerMinutes },
     quizId: typeof value.quizId === 'string' ? value.quizId : undefined,
     quizName: typeof value.quizName === 'string' ? value.quizName : undefined,
+    incorrectOnly: value.incorrectOnly === true || undefined,
     finishedAt: typeof value.finishedAt === 'number' ? value.finishedAt : undefined,
   }
 }
@@ -156,6 +157,7 @@ function normalizeProgress(value: unknown): SavedQuizProgress | null {
     startedAt: typeof value.startedAt === 'number' ? value.startedAt : Date.now(),
     timerMinutes: typeof value.timerMinutes === 'number' && value.timerMinutes > 0 ? value.timerMinutes : 0,
     settings: normalizeSettings(value.settings),
+    incorrectOnly: value.incorrectOnly === true || undefined,
     updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : Date.now(),
   }
 }
@@ -211,6 +213,7 @@ export function normalizeAttempt(value: unknown): QuizAttempt | null {
     settings: normalizeSettings(value.settings),
     questions,
     answers: normalizeAnswerMap(value.answers),
+    incorrectOnly: value.incorrectOnly === true || undefined,
   }
 }
 

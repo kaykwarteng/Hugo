@@ -50,11 +50,6 @@ import { isAnswerCorrect as checkAnswerCorrect, isMultiAnswer, isQuestionLocked,
 /** How many entries the home dashboard's "recent results" strip shows. */
 const RECENT_RESULTS_LIMIT = 5
 
-function practiceIncorrectName(name?: string): string {
-  const base = (name ?? '').replace(/(?:\s*\(incorrect only\))+$/gi, '').trim()
-  return base ? `${base} (incorrect only)` : 'Incorrect only'
-}
-
 /**
  * AI workflows that block the screen while they run.
  *
@@ -317,6 +312,17 @@ export default function App() {
     [history, reviewAttempt, refreshLibrary],
   )
 
+  const handleDeleteAttempts = useCallback(
+    (attempts: QuizAttempt[]) => {
+      void Promise.all(attempts.map((a) => history.removeAttempt(a.id))).then(() => {
+        const ids = new Set(attempts.map((a) => a.id))
+        if (reviewAttempt && ids.has(reviewAttempt.id)) setReviewAttempt(null)
+        void refreshLibrary()
+      }).catch(() => {})
+    },
+    [history, reviewAttempt, refreshLibrary],
+  )
+
   /** Leave the finished-result screen for the quiz's history view. */
   const openHistoryFor = useCallback(
     (quizId: string) => {
@@ -470,7 +476,8 @@ export default function App() {
               if (incorrect.length === 0) return
               quiz.startQuiz(incorrect, { ...reviewAttempt.settings, questionCount: undefined }, {
                 quizId: reviewAttempt.quizId,
-                quizName: practiceIncorrectName(reviewAttempt.quizName),
+                quizName: reviewAttempt.quizName,
+                incorrectOnly: true,
               })
               setReviewAttempt(null)
             }}
@@ -531,7 +538,8 @@ export default function App() {
               if (incorrect.length === 0) return
               quiz.startQuiz(incorrect, { ...finishedSession.settings, questionCount: undefined }, {
                 quizId: finishedSession.quizId,
-                quizName: practiceIncorrectName(finishedSession.quizName),
+                quizName: finishedSession.quizName ?? 'Quiz',
+                incorrectOnly: true,
               })
             }}
             onCreateQuiz={() => navigate('create')}
@@ -738,8 +746,10 @@ export default function App() {
             subheading="Your attempts, newest first"
             onReview={setReviewAttempt}
             onDelete={handleDeleteAttempt}
+            onDeleteMany={handleDeleteAttempts}
             onSaveToLibrary={library.saveAttemptToLibrary}
             isInLibrary={(attempt) => library.findQuizForPastAttempt(attempt) !== null}
+            selectable
             emptyState={
               <div className="rounded-2xl border border-dashed border-slate-300 bg-white/50 p-8 text-center dark:border-slate-700 dark:bg-slate-900/50">
                 <div aria-hidden className="mx-auto flex size-12 items-center justify-center rounded-full bg-slate-100 text-slate-400 dark:bg-slate-800">
