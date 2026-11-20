@@ -3,7 +3,7 @@ import { formatRelativeDay, progressSummary } from '../utils/library'
 import { getCategories } from '../utils/quiz'
 import type { MenuAction } from './OverflowMenu'
 import { OverflowMenu } from './OverflowMenu'
-import { IconChart, IconEdit, IconPlay, IconRefresh, IconTrash, IconTrendingUp, IconX } from './icons/Icons'
+import { IconChart, IconCheckCircle2, IconEdit, IconPlay, IconRefresh, IconTrash, IconTrendingUp, IconX } from './icons/Icons'
 
 interface SavedQuizCardProps {
   quiz: SavedQuiz
@@ -121,12 +121,20 @@ export function SavedQuizCard({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLASS[status]}`}>
-          {STATUS_LABEL[status]}
-        </span>
+        {status === 'completed' ? (
+          <span title="Completed" className="inline-flex rounded-full bg-green-100 p-1.5 text-green-700 dark:bg-green-950 dark:text-green-400">
+            <IconCheckCircle2 size={16} />
+            <span className="sr-only">Completed</span>
+          </span>
+        ) : (
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${STATUS_CLASS[status]}`}>
+            {STATUS_LABEL[status]}
+          </span>
+        )}
         {masteryEnabled && (
-          <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-            Tracking
+          <span title="Tracking progress" className="inline-flex rounded-full bg-indigo-100 p-1.5 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+            <IconTrendingUp size={16} />
+            <span className="sr-only">Tracking progress</span>
           </span>
         )}
         {progress !== null && (
