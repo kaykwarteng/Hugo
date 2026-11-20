@@ -252,12 +252,11 @@ export function IconRefresh(props: IconProps) {
   )
 }
 
-export function IconGraduationCap(props: IconProps) {
+export function IconTrendingUp(props: IconProps) {
   return (
     <svg {...baseProps(props)}>
-      <path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z" />
-      <path d="M22 10v6" />
-      <path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5" />
+      <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+      <polyline points="16 7 22 7 22 13" />
     </svg>
   )
 }

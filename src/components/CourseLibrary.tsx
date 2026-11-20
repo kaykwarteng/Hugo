@@ -13,7 +13,7 @@ import {
   IconFileQuestion,
   IconFolder,
   IconFolderOpen,
-  IconGraduationCap,
+  IconTrendingUp,
   IconLayers,
   IconMoreVertical,
   IconPlay,
@@ -435,7 +435,7 @@ export function CourseLibrary({
                 menuItems.push({ label: 'View results', icon: <IconChart size={14} />, onClick: () => onViewCourseResults(scopeId) })
               }
               if (onToggleMastery) {
-                menuItems.push({ label: enabled ? 'Disable mastery mode' : 'Enable mastery mode', icon: <IconGraduationCap size={14} />, onClick: () => onToggleMastery(scopeId, !enabled) })
+                menuItems.push({ label: enabled ? 'Stop tracking progress' : 'Track progress', icon: <IconTrendingUp size={14} />, onClick: () => onToggleMastery(scopeId, !enabled) })
               }
               menuItems.push({ label: 'Edit course', icon: <IconEdit size={14} />, onClick: () => setEditingCourse(course) })
               menuItems.push({ label: 'Delete course', icon: <IconTrash size={14} />, danger: true, onClick: () => setConfirmDelete({ type: 'course', course }) })
@@ -922,8 +922,8 @@ export function CourseLibrary({
               const scopeId = `course:${course.id}`
               const enabled = isMasteryEnabled?.(scopeId) ?? false
               menuItems.push({
-                label: enabled ? 'Disable mastery mode' : 'Enable mastery mode',
-                icon: <IconGraduationCap size={14} />,
+                label: enabled ? 'Stop tracking progress' : 'Track progress',
+                icon: <IconTrendingUp size={14} />,
                 onClick: () => onToggleMastery(scopeId, !enabled),
               })
             }
@@ -998,7 +998,7 @@ export function CourseLibrary({
                   </span>
                   {isMasteryEnabled?.(`course:${course.id}`) && (
                     <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-                      Mastery
+                      Tracking
                     </span>
                   )}
                   {active && progress && (

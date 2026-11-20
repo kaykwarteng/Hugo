@@ -643,15 +643,6 @@ export default function App() {
             {(coursesApi.loading || library.loading || history.loading) && !(coursesApi.error || library.error || history.error) && (
               <p className="text-sm text-slate-500">Loading library from database…</p>
             )}
-            <MasteryDashboard
-              mastery={masteryApi.mastery}
-              enabledScopes={masteryApi.enabledScopes}
-              quizzes={library.quizzes}
-              courses={coursesApi.courses}
-              onStartReview={startMasteryReview}
-              onStartFlashcards={startFlashcards}
-              onResetScope={resetMasteryScope}
-            />
             <CourseLibrary
               courses={coursesApi.courses}
               onAddCourse={coursesApi.addCourse}
@@ -734,6 +725,15 @@ export default function App() {
                   </div>
                 ) : null
               }
+            />
+            <MasteryDashboard
+              mastery={masteryApi.mastery}
+              enabledScopes={masteryApi.enabledScopes}
+              quizzes={library.quizzes}
+              courses={coursesApi.courses}
+              onStartReview={startMasteryReview}
+              onStartFlashcards={startFlashcards}
+              onResetScope={resetMasteryScope}
             />
           </div>
         )}

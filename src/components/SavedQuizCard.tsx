@@ -3,7 +3,7 @@ import { formatRelativeDay, progressSummary } from '../utils/library'
 import { getCategories } from '../utils/quiz'
 import type { MenuAction } from './OverflowMenu'
 import { OverflowMenu } from './OverflowMenu'
-import { IconChart, IconEdit, IconGraduationCap, IconPlay, IconRefresh, IconTrash, IconX } from './icons/Icons'
+import { IconChart, IconEdit, IconPlay, IconRefresh, IconTrash, IconTrendingUp, IconX } from './icons/Icons'
 
 interface SavedQuizCardProps {
   quiz: SavedQuiz
@@ -79,8 +79,8 @@ export function SavedQuizCard({
     },
     ...(onToggleMastery
       ? [{
-          label: masteryEnabled ? 'Disable mastery mode' : 'Enable mastery mode',
-          icon: <IconGraduationCap size={14} />,
+          label: masteryEnabled ? 'Stop tracking progress' : 'Track progress',
+          icon: <IconTrendingUp size={14} />,
           onSelect: () => onToggleMastery(!masteryEnabled),
         }]
       : []),
@@ -126,7 +126,7 @@ export function SavedQuizCard({
         </span>
         {masteryEnabled && (
           <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-            Mastery
+            Tracking
           </span>
         )}
         {progress !== null && (

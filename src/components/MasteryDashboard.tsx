@@ -422,7 +422,7 @@ export function MasteryDashboard({ mastery, enabledScopes, quizzes, courses, onS
     <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold tracking-tight">Mastery & review</h2>
+          <h2 className="text-xl font-bold tracking-tight">Progress</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             {totals.tracked} tracked across {totals.total} questions · {totals.strong} strong · {totals.learning} learning · {totals.due} due · {totals.weak} weak
           </p>
