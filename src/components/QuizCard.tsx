@@ -1,5 +1,3 @@
-import { useEffect, useRef } from 'react'
-import { playSound } from '../services/sound'
 import type { QuizQuestion } from '../types/quiz'
 import { getOptionKey, getOptionMedia, getOptionText, isAnswerCorrect, isMultiAnswer } from '../utils/quiz'
 import { ExplanationPanel } from './ExplanationPanel'
@@ -58,23 +56,6 @@ export function QuizCard({
     return key
   }
   const joinLabels = (keys: string[]) => keys.map(labelFor).join(' · ')
-
-  /*
-   * The verdict sounds on a *transition*, not on a state: only for a question
-   * this component watched go from unrevealed to revealed. Navigating back to
-   * an already-checked question, or restoring a session parked on one, is
-   * silent, because there was no transition to hear.
-   */
-  const armedFor = useRef<number | null>(null)
-  useEffect(() => {
-    if (!revealed) {
-      armedFor.current = question.id
-      return
-    }
-    if (armedFor.current !== question.id) return
-    armedFor.current = null
-    playSound(correct ? 'correct' : 'incorrect')
-  }, [question.id, revealed, correct])
 
   return (
     <div

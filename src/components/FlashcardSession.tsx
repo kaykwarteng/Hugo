@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { apiRecordMastery } from '../services/api'
+import { playSound } from '../services/sound'
 import { masteryKey } from '../utils/mastery'
 import type { QuizQuestion } from '../types/quiz'
 import { MathText } from './MathText'
@@ -30,6 +31,8 @@ export function FlashcardSession({ questions, scopeId, title, onExit, onProgress
 
   const rate = async (grade: Grade) => {
     if (!card || busy) return
+    const willFinish = index + 1 >= deck.length
+    playSound(willFinish ? 'pass' : grade === 'good' ? 'correct' : grade === 'again' ? 'incorrect' : 'select')
     setBusy(true)
     setError(null)
     try {
@@ -39,10 +42,10 @@ export function FlashcardSession({ questions, scopeId, title, onExit, onProgress
       setError(e instanceof Error ? e.message : 'Could not save rating')
     } finally {
       setCounts((c) => ({ ...c, [grade]: c[grade] + 1 }))
-      const next = index + 1
-      if (next >= deck.length) setDone(true)
-      else {
-        setIndex(next)
+      if (willFinish) {
+        setDone(true)
+      } else {
+        setIndex(index + 1)
         setFlipped(false)
       }
       setBusy(false)
@@ -102,7 +105,7 @@ export function FlashcardSession({ questions, scopeId, title, onExit, onProgress
           {!flipped ? (
             <div className="mt-8 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center dark:border-slate-700 dark:bg-slate-800/40">
               <p className="text-sm text-slate-600 dark:text-slate-400">Think of the answer, then reveal it and rate yourself.</p>
-              <button type="button" onClick={() => setFlipped(true)} className="mt-4 min-h-12 w-full rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-sm hover:bg-indigo-700 sm:w-auto">
+              <button type="button" onClick={() => { playSound('select'); setFlipped(true) }} className="mt-4 min-h-12 w-full rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white shadow-sm hover:bg-indigo-700 sm:w-auto">
                 Show answer
               </button>
             </div>

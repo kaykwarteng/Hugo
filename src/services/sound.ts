@@ -1,40 +1,22 @@
 import type { SoundName } from '../types/sound'
-import { MIN_GAIN, SOUND_SPECS, scheduleTones, shouldPlay } from '../utils/sound'
+import { MASTER_GAIN, SOUND_SPECS, shouldPlay } from '../utils/sound'
 
 /**
- * The audio output shell.
+ * Web Audio sound engine (singleton).
  *
- * This is the **only** module allowed to construct an `AudioContext`. It owns
- * browser audio output state, separate from DB-backed app persistence.
- * Everything else calls `playSound(name)` and gets on with it.
- *
- * Why a module singleton rather than a React context: audio output *is* a
- * global, exactly like `<html>`. `useAppearance` doesn't thread its preference
- * down the tree either — its effect calls
- * `applyAppearance(document.documentElement, prefs)`. `useSound` does the same
- * by calling `setSoundEnabled` here, which keeps `playSound` a bare import at
- * every trigger site instead of a prop drilled through ten components. It
- * returns nothing, causes no re-render and never changes identity, so it is a
- * side-effect sink, not state.
- *
- * The module is **inert until the first `playSound`**: no context, no `window`
- * access, no storage read at import time. Everything is defensive — the Web
- * Audio API can be missing, blocked, or refuse to resume, and **no function
- * here may throw**, because a silent app is acceptable and a broken one is not.
+ * `playSound(name)` is the only trigger API. Calls are safe anywhere and never
+ * throw. A shared AudioContext is unlocked on user gestures so sounds work for
+ * both standalone and course quiz flows.
  */
 
-/** Mirrors the stored preference. `useSound` is the only writer. */
 let enabled = true
-
-let context: AudioContext | null = null
-/** Latched once audio proves unavailable, so we stop retrying on every click. */
-let unavailable = false
+let audioCtx: AudioContext | null = null
+let unlockInstalled = false
 const lastPlayed = new Map<SoundName, number>()
 
 type AudioContextCtor = typeof AudioContext
 
-/** Safari still only exposes the prefixed constructor. */
-function audioContextCtor(): AudioContextCtor | null {
+function getCtor(): AudioContextCtor | null {
   if (typeof window === 'undefined') return null
   const w = window as unknown as {
     AudioContext?: AudioContextCtor
@@ -43,107 +25,145 @@ function audioContextCtor(): AudioContextCtor | null {
   return w.AudioContext ?? w.webkitAudioContext ?? null
 }
 
-/**
- * Whether audio could work at all. Checks for the constructor without calling
- * it, so asking the question never creates a context.
- */
 export function isSoundSupported(): boolean {
-  return audioContextCtor() !== null
+  return getCtor() !== null
 }
 
-/**
- * The context, created on first use.
- *
- * Never at module load: a browser creates it `suspended` until a user gesture,
- * and a user who has sound switched off should never cause one to exist at all.
- */
 function getContext(): AudioContext | null {
-  if (unavailable) return null
-  if (context !== null) return context
-
-  const Ctor = audioContextCtor()
-  if (Ctor === null) {
-    unavailable = true
-    return null
-  }
+  if (typeof window === 'undefined') return null
   try {
-    context = new Ctor()
-    return context
+    const Ctor = getCtor()
+    if (!Ctor) return null
+    if (audioCtx && (audioCtx.state as string) === 'closed') audioCtx = null
+    if (!audioCtx) audioCtx = new Ctor()
+    return audioCtx
   } catch {
-    unavailable = true
     return null
   }
 }
 
-/** Turn sound on or off. Called by `useSound`; nothing else. Idempotent. */
+function resume(ctx: AudioContext): void {
+  try {
+    if (ctx.state === 'suspended') void ctx.resume().catch(() => {})
+  } catch {
+    /* ignore */
+  }
+}
+
+function unlock(): void {
+  if (!enabled) return
+  const ctx = getContext()
+  if (ctx) resume(ctx)
+}
+
+function installUnlock(): void {
+  if (unlockInstalled || typeof window === 'undefined') return
+  unlockInstalled = true
+  const handler = () => unlock()
+  const opts: AddEventListenerOptions = { capture: true, passive: true }
+  window.addEventListener('pointerdown', handler, opts)
+  window.addEventListener('touchstart', handler, opts)
+  window.addEventListener('mousedown', handler, opts)
+  window.addEventListener('click', handler, opts)
+  window.addEventListener('keydown', handler, { capture: true })
+  window.addEventListener('focus', handler)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') unlock()
+  })
+}
+
+export function primeSound(): void {
+  unlock()
+}
+
 export function setSoundEnabled(on: boolean): void {
   enabled = on
+  if (on) {
+    installUnlock()
+    unlock()
+  }
 }
 
 export function isSoundEnabled(): boolean {
   return enabled
 }
 
-/**
- * Play a sound, if sound is on and audio works. A no-op otherwise.
- *
- * Safe to call from any event handler — every trigger in the app is a user
- * gesture, which is what lets a suspended context resume. Never call it from
- * inside a `setState` updater: React runs those twice under StrictMode.
- */
-export function playSound(name: SoundName): void {
-  // Checked before `getContext`, so switching sound off means no context is
-  // ever constructed.
-  if (!enabled) return
+function playTones(ctx: AudioContext, name: SoundName): void {
+  const spec = SOUND_SPECS[name]
+  const base = ctx.currentTime + 0.01
+  for (const tone of spec) {
+    try {
+      const start = base + tone.at / 1000
+      const duration = Math.max(tone.duration, 20) / 1000
+      const attack = Math.min(0.01, duration * 0.35)
+      const stop = start + duration
+      const sustainEnd = Math.max(start + attack, stop - 0.005)
+      const peak = Math.max(0.0005, tone.gain * MASTER_GAIN)
 
-  const now = Date.now()
-  if (!shouldPlay(lastPlayed.get(name) ?? null, now)) return
-
-  const ctx = getContext()
-  if (ctx === null) return
-  lastPlayed.set(name, now)
-
-  try {
-    // A backgrounded tab gets re-suspended, so this is checked every time
-    // rather than once — recovery is then automatic. Deliberately not awaited:
-    // `playSound` stays synchronous, and awaiting would move scheduling out of
-    // the gesture and add audible latency. A rejected resume just means
-    // silence, which the catch already covers.
-    if (ctx.state === 'suspended') void ctx.resume().catch(() => {})
-
-    for (const tone of scheduleTones(SOUND_SPECS[name], ctx.currentTime)) {
       const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
       osc.type = tone.type
-      osc.frequency.setValueAtTime(tone.freq, tone.startSec)
+      osc.frequency.setValueAtTime(tone.freq, start)
 
-      // Short linear attack, then an exponential decay — the attack stops the
-      // note clicking on, the decay is what makes it read as an instrument
-      // rather than a beep.
-      const envelope = ctx.createGain()
-      envelope.gain.setValueAtTime(MIN_GAIN, tone.startSec)
-      envelope.gain.linearRampToValueAtTime(tone.peak, tone.attackEndSec)
-      envelope.gain.exponentialRampToValueAtTime(MIN_GAIN, tone.stopSec)
+      gain.gain.setValueAtTime(0.0001, start)
+      gain.gain.linearRampToValueAtTime(peak, start + attack)
+      gain.gain.setValueAtTime(peak, sustainEnd)
+      gain.gain.linearRampToValueAtTime(0.0001, stop)
 
-      osc.connect(envelope)
-      envelope.connect(ctx.destination)
-      osc.start(tone.startSec)
-      osc.stop(tone.stopSec)
-      // Release the nodes once they've sounded; a long quiz would otherwise
-      // accumulate an oscillator per click for the whole session.
+      osc.connect(gain)
+      gain.connect(ctx.destination)
       osc.onended = () => {
-        osc.disconnect()
-        envelope.disconnect()
+        try {
+          osc.disconnect()
+          gain.disconnect()
+        } catch {
+          /* ignore */
+        }
       }
+      osc.start(start)
+      osc.stop(stop + 0.03)
+    } catch {
+      /* skip tone */
     }
-  } catch {
-    unavailable = true
   }
 }
 
-/** Test seam — drops the cached context, the failure latch and the throttle. */
+export function playSound(name: SoundName): void {
+  try {
+    if (!enabled || typeof window === 'undefined') return
+
+    const now = Date.now()
+    if (!shouldPlay(lastPlayed.get(name) ?? null, now)) return
+
+    const ctx = getContext()
+    if (!ctx) return
+    resume(ctx)
+
+    lastPlayed.set(name, now)
+    playTones(ctx, name)
+  } catch {
+    try {
+      lastPlayed.delete(name)
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+/** Test seam — resets cached context and state. */
 export function resetSoundForTests(): void {
-  context = null
-  unavailable = false
+  try {
+    const c = audioCtx
+    audioCtx = null
+    if (c && (c.state as string) !== 'closed') void c.close().catch(() => {})
+  } catch {
+    /* ignore */
+  }
   enabled = true
   lastPlayed.clear()
+  unlockInstalled = false
+}
+
+if (typeof window !== 'undefined') {
+  installUnlock()
 }

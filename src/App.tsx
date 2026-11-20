@@ -873,22 +873,36 @@ function ActiveQuiz({ session, quiz, onExit }: ActiveQuizProps) {
 
   const remaining = useTimer(session.startedAt, session.timerMinutes, true, quiz.finishQuiz)
 
-  /*
-   * Picking and paging each have two entry points — the buttons below and the
-   * `keydown` listener further down — so the handlers live here, where both
-   * paths meet, rather than in `QuizCard`. A view-only trigger would leave
-   * keyboard users in silence, and duplicating one in each path would let them
-   * drift apart.
-   *
-   * The guards are the other half: `useQuiz`'s mutators no-op silently when a
-   * question is locked or you're at the ends of the list, and a sound on a
-   * click that changed nothing is a lie. The buttons are `disabled` in those
-   * states but the keyboard is not, so the check belongs here too.
-   */
+  // Play quiz interaction sounds from session transitions so all questions and
+  // modes (standalone and course) behave consistently. Finish/pass-fail sound is
+  // handled by the result screen.
+  const prevSessionRef = useRef<QuizSession | null>(null)
+  useEffect(() => {
+    const prev = prevSessionRef.current
+    prevSessionRef.current = session
+    if (!prev || prev.attemptId !== session.attemptId || session.status !== 'active') return
+
+    if (session.revealed.length > prev.revealed.length) {
+      const prevRevealed = new Set(prev.revealed)
+      const revealedId = [...session.revealed].reverse().find((id) => !prevRevealed.has(id))
+      const q = revealedId === undefined ? undefined : session.questions.find((item) => item.id === revealedId)
+      if (q) playSound(checkAnswerCorrect(q, session.answers[q.id]) ? 'correct' : 'incorrect')
+      return
+    }
+
+    if (session.currentIndex !== prev.currentIndex) {
+      playSound('navigate')
+      return
+    }
+
+    if (session.answers !== prev.answers || session.drafts !== prev.drafts) {
+      playSound('select')
+    }
+  }, [session])
+
   const handlePick = useCallback(
     (option: string) => {
       if (locked) return
-      playSound('select')
       if (multi) quiz.toggleDraft(question.id, option)
       else quiz.selectAnswer(question.id, option)
     },
@@ -897,15 +911,18 @@ function ActiveQuiz({ session, quiz, onExit }: ActiveQuizProps) {
 
   const handleNext = useCallback(() => {
     if (currentIndex >= questions.length - 1) return
-    playSound('navigate')
     quiz.next()
   }, [quiz, currentIndex, questions.length])
 
   const handlePrevious = useCallback(() => {
     if (currentIndex <= 0) return
-    playSound('navigate')
     quiz.previous()
   }, [quiz, currentIndex])
+
+  const handleCheck = useCallback(() => {
+    if (locked || !hasSelection) return
+    quiz.checkAnswer(question.id)
+  }, [locked, hasSelection, question.id, quiz])
 
   // A long question can leave the next one scrolled past its own heading.
   useEffect(() => {
@@ -923,10 +940,7 @@ function ActiveQuiz({ session, quiz, onExit }: ActiveQuizProps) {
       else if (event.key === 'ArrowLeft') handlePrevious()
       else if (event.key === 'Enter') {
         // Enter mirrors the "Check Answer" button, on either kind of question.
-        // Deliberately silent: the verdict tone follows a tick later, and a
-        // click stacked in front of it would muddy the app's most important
-        // sound.
-        if (!locked && hasSelection) quiz.checkAnswer(question.id)
+        handleCheck()
       } else if (!locked) {
         // Number keys 1-8
         const num = Number(event.key)
@@ -946,7 +960,7 @@ function ActiveQuiz({ session, quiz, onExit }: ActiveQuizProps) {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [quiz, question, locked, hasSelection, handlePick, handleNext, handlePrevious])
+  }, [question, locked, handlePick, handleNext, handlePrevious, handleCheck])
 
   const handleFinish = () => {
     // Ask for confirmation when questions are still unanswered, so a stray
@@ -974,6 +988,7 @@ function ActiveQuiz({ session, quiz, onExit }: ActiveQuizProps) {
 
       <main className="mx-auto max-w-3xl px-4 pt-5 pb-36">
         <QuizCard
+          key={question.id}
           question={question}
           selectedAnswers={answers[question.id]}
           draft={drafts[question.id]}
@@ -983,7 +998,7 @@ function ActiveQuiz({ session, quiz, onExit }: ActiveQuizProps) {
           // mutator that means.
           onSelect={handlePick}
           onToggle={handlePick}
-          onCheck={() => quiz.checkAnswer(question.id)}
+          onCheck={handleCheck}
         />
 
         <p className="mt-5 text-center text-xs text-slate-400 dark:text-slate-600">

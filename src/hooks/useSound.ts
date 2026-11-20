@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadSoundPrefs, saveSoundPrefs } from '../services/storage'
-import { playSound, setSoundEnabled } from '../services/sound'
+import { playSound, primeSound, setSoundEnabled } from '../services/sound'
 import { defaultSoundPrefs } from '../utils/sound'
 import type { SoundPrefs } from '../types/sound'
 
 export function useSound() {
   const [sound, setSound] = useState<SoundPrefs>(defaultSoundPrefs())
+  const soundRef = useRef(sound)
+  soundRef.current = sound
 
   useEffect(() => {
     let cancelled = false
@@ -14,7 +16,7 @@ export function useSound() {
         if (!cancelled) setSound(prefs)
       })
       .catch(() => {
-        /* keep defaults when DB unavailable */
+        /* keep defaults */
       })
     return () => {
       cancelled = true
@@ -23,18 +25,19 @@ export function useSound() {
 
   useEffect(() => {
     setSoundEnabled(sound.enabled)
-    void saveSoundPrefs(sound).catch(() => {
-      /* DB unavailable; UI still reflects chosen sound setting */
-    })
+    if (sound.enabled) primeSound()
+    void saveSoundPrefs(sound).catch(() => {})
   }, [sound])
 
   const updateSound = useCallback((patch: Partial<SoundPrefs>) => {
-    setSound((current) => {
-      const next = { ...current, ...patch }
-      setSoundEnabled(next.enabled)
-      if (next.enabled && !current.enabled) playSound('select')
-      return next
-    })
+    const current = soundRef.current
+    const next: SoundPrefs = { ...current, ...patch }
+    setSoundEnabled(next.enabled)
+    if (next.enabled) {
+      primeSound()
+      if (!current.enabled) playSound('select')
+    }
+    setSound(next)
   }, [])
 
   return { sound, updateSound }
